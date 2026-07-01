@@ -11,14 +11,25 @@ export async function GET(request) {
       `
         SELECT
           cv.*,
+          cv.new_products_total AS sale_total,
+          cv.payment_amount AS payment_total,
           c.name AS customer_name,
-          s.name AS seller_name
+          s.name AS seller_name,
+          COALESCE(items.products_summary, '') AS products_summary
         FROM cobrokits.customer_visits cv
         JOIN cobrokits.customers c ON c.id = cv.customer_id
         JOIN cobrokits.sellers s ON s.id = cv.seller_id
+        LEFT JOIN (
+          SELECT
+            cvi.visit_id,
+            string_agg(cvi.quantity || 'x ' || p.name, ', ' ORDER BY p.name) AS products_summary
+          FROM cobrokits.customer_visit_items cvi
+          JOIN cobrokits.products p ON p.id = cvi.product_id
+          GROUP BY cvi.visit_id
+        ) items ON items.visit_id = cv.id
         WHERE ($1::uuid IS NULL OR cv.customer_id = $1::uuid)
           AND ($2::uuid IS NULL OR cv.seller_id = $2::uuid)
-        ORDER BY cv.visit_date DESC
+        ORDER BY cv.visit_date DESC, cv.created_at DESC
         LIMIT 100
       `,
       [customerId, sellerId],

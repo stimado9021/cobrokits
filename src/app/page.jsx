@@ -15,7 +15,8 @@ import {
   Users,
   Settings,
   Archive,
-  Truck
+  Truck,
+  BarChart2
 } from "lucide-react";
 
 import { Dashboard } from "../components/Dashboard";
@@ -24,6 +25,7 @@ import { NuevoCliente } from "../components/NuevoCliente";
 import { EntregarInventario } from "../components/EntregarInventario";
 import { Inventario } from "../components/Inventario";
 import { Configuracion } from "../components/Configuracion";
+import { ReportesSemanales } from "../components/ReportesSemanales";
 
 const money = new Intl.NumberFormat("es-CO", {
   style: "currency",
@@ -51,12 +53,14 @@ export default function Home() {
   const [customers, setCustomers] = useState([]);
   const [products, setProducts] = useState([]);
   const [inventory, setInventory] = useState([]);
+  const [visits, setVisits] = useState([]);
   const [activeSellerId, setActiveSellerId] = useState("");
   const [notice, setNotice] = useState("");
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   
   const [activeTab, setActiveTab] = useState("dashboard");
+  const [visitFormKey, setVisitFormKey] = useState(0);
 
   const [visitItems, setVisitItems] = useState([]);
   const [currentProductId, setCurrentProductId] = useState("");
@@ -111,21 +115,28 @@ export default function Home() {
     [customers, activeSellerId],
   );
 
+  const activeSellerName = useMemo(
+    () => sellers.find((seller) => seller.id === activeSellerId)?.name || "Todos los vendedores",
+    [sellers, activeSellerId],
+  );
+
   async function loadAll() {
     setLoading(true);
     try {
-      const [dashboardData, sellersData, productsData, customersData, inventoryData] = await Promise.all([
+      const [dashboardData, sellersData, productsData, customersData, inventoryData, visitsData] = await Promise.all([
         api("/apis/dashboard"),
         api("/apis/sellers"),
         api("/apis/products"),
         api("/apis/customers"),
         api("/apis/inventory"),
+        api("/apis/visits"),
       ]);
       setDashboard(dashboardData);
       setSellers(sellersData.sellers);
       setProducts(productsData.products);
       setCustomers(customersData.customers);
       setInventory(inventoryData.inventory);
+      setVisits(visitsData.visits);
       setActiveSellerId((current) => current || sellersData.sellers[0]?.id || "");
     } catch (error) {
       setNotice(error.message);
@@ -300,6 +311,9 @@ export default function Home() {
       });
       formElement.reset();
       setVisitItems([]);
+      setCurrentProductId("");
+      setCurrentQuantity("");
+      setVisitFormKey((key) => key + 1);
       setNotice("Visita registrada");
       await loadAll();
     } catch (e) {
@@ -343,6 +357,10 @@ export default function Home() {
             <Archive size={18} />
             <span>Inventario General</span>
           </button>
+          <button className={`navButton ${activeTab === 'reportes' ? 'active' : ''}`} onClick={() => setActiveTab('reportes')}>
+            <BarChart2 size={18} />
+            <span>Reportes Semanales</span>
+          </button>
           <button className={`navButton ${activeTab === 'configuracion' ? 'active' : ''}`} onClick={() => setActiveTab('configuracion')}>
             <Settings size={18} />
             <span>Configuración</span>
@@ -353,7 +371,10 @@ export default function Home() {
 
         <label className="field">
           <span>Vendedor activo</span>
-          <select value={activeSellerId} onChange={(event) => setActiveSellerId(event.target.value)}>
+          <select
+            value={activeSellerId}
+            onChange={(event) => setActiveSellerId(event.target.value)}
+          >
             <option value="">Todos</option>
             {sellers.map((seller) => (
               <option key={seller.id} value={seller.id}>
@@ -381,6 +402,7 @@ export default function Home() {
               {activeTab === 'entregar-inventario' && 'Entregar Inventario'}
               {activeTab === 'clientes' && 'Gestión de Clientes'}
               {activeTab === 'inventario' && 'Inventario General'}
+              {activeTab === 'reportes' && 'Reportes Semanales'}
               {activeTab === 'configuracion' && 'Configuración de Sistema'}
             </h1>
           </div>
@@ -391,12 +413,22 @@ export default function Home() {
 
         {notice ? <div className="notice">{notice}</div> : null}
 
-        {activeTab === 'dashboard' && <Dashboard dashboard={dashboard} formatMoney={formatMoney} loading={loading} />}
+        {activeTab === 'dashboard' && (
+          <Dashboard
+            dashboard={dashboard}
+            formatMoney={formatMoney}
+            loading={loading}
+            activeSellerId={activeSellerId}
+            activeSellerName={activeSellerName}
+          />
+        )}
         {activeTab === 'registrar-visita' && 
           <RegistrarVisita 
+            key={visitFormKey}
             registerVisit={registerVisit}
             sellers={sellers}
             activeSellerId={activeSellerId}
+            setActiveSellerId={setActiveSellerId}
             activeCustomers={activeCustomers}
             formatMoney={formatMoney}
             products={products}
@@ -408,6 +440,8 @@ export default function Home() {
             visitItems={visitItems}
             removeVisitItem={removeVisitItem}
             isSubmitting={isSubmitting}
+            visits={visits}
+            activeSellerName={activeSellerName}
           />
         }
         {activeTab === 'clientes' && 
@@ -415,7 +449,7 @@ export default function Home() {
             createCustomer={createCustomer}
             sellers={sellers}
             activeSellerId={activeSellerId}
-            activeCustomers={activeCustomers}
+            customers={customers}
             updateCustomer={(id, data) => updateEntity('customers', id, data)}
             deleteCustomer={(id) => deleteEntity('customers', id)}
             isSubmitting={isSubmitting}
@@ -435,10 +469,14 @@ export default function Home() {
             deliveryItems={deliveryItems}
             removeDeliveryItem={removeDeliveryItem}
             inventory={inventory}
+            formatMoney={formatMoney}
             isSubmitting={isSubmitting}
           />
         }
         {activeTab === 'inventario' && <Inventario />}
+        {activeTab === 'reportes' && (
+          <ReportesSemanales activeSellerId={activeSellerId} activeSellerName={activeSellerName} />
+        )}
         {activeTab === 'configuracion' && 
           <Configuracion 
             createSeller={createSeller}
@@ -457,4 +495,3 @@ export default function Home() {
     </main>
   );
 }
-

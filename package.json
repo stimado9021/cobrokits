@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "db:setup": "node scripts/apply-cobrokits-schema.mjs"
+    "db:setup": "node scripts/apply-cobrokits-schema.mjs",
+    "db:seed": "node scripts/seed-data.mjs"
   },
   "dependencies": {
     "lucide-react": "^1.21.0",

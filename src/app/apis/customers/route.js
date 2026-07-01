@@ -23,6 +23,7 @@ export async function GET(request) {
         FROM cobrokits.customers c
         JOIN cobrokits.sellers s ON s.id = c.seller_id
         WHERE ($1::uuid IS NULL OR c.seller_id = $1::uuid)
+          AND c.is_active = true
         ORDER BY c.name
       `,
       [sellerId],
@@ -72,8 +73,11 @@ export async function DELETE(request) {
   try {
     const { searchParams } = new URL(request.url);
     const id = searchParams.get("id");
-    await query(`DELETE FROM cobrokits.customers WHERE id = $1`, [id]);
-    return ok({ deleted: true });
+    const [customer] = await query(
+      `UPDATE cobrokits.customers SET is_active = false WHERE id = $1 RETURNING id, is_active`,
+      [id],
+    );
+    return ok({ deleted: true, customer });
   } catch (error) {
     return fail(error);
   }

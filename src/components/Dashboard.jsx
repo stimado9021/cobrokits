@@ -39,8 +39,17 @@ function ListItemSkeleton() {
   );
 }
 
-export function Dashboard({ dashboard, formatMoney, loading }) {
+export function Dashboard({
+  dashboard,
+  formatMoney,
+  loading,
+  activeSellerId = "",
+  activeSellerName = "Todos los vendedores",
+}) {
   const totals = dashboard?.totals || {};
+  const pendingBalances = (dashboard?.balances || []).filter(
+    (balance) => !activeSellerId || balance.seller_id === activeSellerId,
+  );
 
   return (
     <>
@@ -91,16 +100,19 @@ export function Dashboard({ dashboard, formatMoney, loading }) {
       <section className="workgrid">
         <div className="panel listPanel">
           <div className="panelHead">
-            <h2>Cartera pendiente</h2>
+            <div>
+              <h2>Cartera pendiente</h2>
+              <span>{activeSellerName}</span>
+            </div>
             {loading
               ? <SkeletonLine width="20px" height="1rem" />
-              : <span>{dashboard?.balances?.length || 0}</span>
+              : <span>{pendingBalances.length}</span>
             }
           </div>
           <div className="list">
             {loading
               ? [1,2,3].map(n => <ListItemSkeleton key={n} />)
-              : (dashboard?.balances || []).map((balance) => (
+              : pendingBalances.map((balance) => (
                   <article key={balance.customer_id} className="listItem">
                     <div>
                       <strong>{balance.customer_name}</strong>
@@ -110,6 +122,14 @@ export function Dashboard({ dashboard, formatMoney, loading }) {
                   </article>
                 ))
             }
+            {!loading && pendingBalances.length === 0 && (
+              <article className="listItem">
+                <div>
+                  <strong>Sin cartera pendiente</strong>
+                  <span>{activeSellerName}</span>
+                </div>
+              </article>
+            )}
           </div>
         </div>
 

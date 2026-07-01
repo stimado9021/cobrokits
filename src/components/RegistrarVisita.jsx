@@ -1,9 +1,10 @@
-import { Save, PackagePlus } from "lucide-react";
+import { ClipboardList, PackagePlus, Save } from "lucide-react";
 
 export function RegistrarVisita({ 
   registerVisit, 
   sellers, 
   activeSellerId, 
+  setActiveSellerId,
   activeCustomers, 
   formatMoney, 
   products, 
@@ -14,16 +15,27 @@ export function RegistrarVisita({
   addVisitItem, 
   visitItems, 
   removeVisitItem,
-  isSubmitting
+  isSubmitting,
+  visits = [],
+  activeSellerName = "Todos los vendedores",
 }) {
+  const sellerVisits = visits
+    .filter((visit) => !activeSellerId || visit.seller_id === activeSellerId)
+    .sort((a, b) => new Date(b.visit_date) - new Date(a.visit_date));
+
   return (
-    <section className="workgrid">
+    <section className="registrar-visita-layout">
       <form className="panel" onSubmit={registerVisit}>
         <div className="panelHead">
           <h2>Registrar visita</h2>
           <Save size={18} />
         </div>
-        <select name="seller_id" defaultValue={activeSellerId} required>
+        <select
+          name="seller_id"
+          value={activeSellerId}
+          onChange={(event) => setActiveSellerId(event.target.value)}
+          required
+        >
           <option value="">Vendedor</option>
           {sellers.map((seller) => (
             <option key={seller.id} value={seller.id}>
@@ -77,6 +89,49 @@ export function RegistrarVisita({
           {isSubmitting ? "Registrando..." : "Registrar"}
         </button>
       </form>
+
+      <section className="panel visitas-table-panel">
+        <div className="panelHead">
+          <div>
+            <h2>Visitas registradas</h2>
+            <span>{activeSellerName}</span>
+          </div>
+          <ClipboardList size={18} />
+        </div>
+
+        <div className="visitas-table-wrap">
+          <table className="visitas-table">
+            <thead>
+              <tr>
+                <th>Cliente</th>
+                <th>Venta</th>
+                <th>Abono</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sellerVisits.length === 0 ? (
+                <tr>
+                  <td colSpan="3" className="empty-cell">Sin visitas registradas</td>
+                </tr>
+              ) : (
+                sellerVisits.map((visit) => (
+                  <tr key={visit.id}>
+                    <td>
+                      <strong>{visit.customer_name}</strong>
+                      <span>
+                        {new Date(visit.visit_date).toLocaleDateString("es-CO")} ·{" "}
+                        {visit.products_summary || "Sin producto nuevo"}
+                      </span>
+                    </td>
+                    <td className="money-cell">{formatMoney(visit.sale_total)}</td>
+                    <td className="money-cell">{formatMoney(visit.payment_total)}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
     </section>
   );
 }

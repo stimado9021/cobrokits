@@ -15,7 +15,6 @@ export async function GET() {
       FROM cobrokits.v_customer_current_balances
       WHERE is_active = true AND current_balance > 0
       ORDER BY current_balance DESC, customer_name
-      LIMIT 25
     `);
 
     return ok({ totals, sellers, balances });
