@@ -268,8 +268,9 @@ CREATE OR REPLACE FUNCTION register_customer_visit(
   p_seller_id UUID,
   p_items JSONB DEFAULT '[]'::jsonb,
   p_payment_amount NUMERIC DEFAULT 0,
-  p_payment_method payment_method DEFAULT NULL,
-  p_notes TEXT DEFAULT NULL
+  p_payment_method cobrokits.payment_method DEFAULT NULL,
+  p_notes TEXT DEFAULT NULL,
+  p_visit_date DATE DEFAULT CURRENT_DATE
 )
 RETURNS TABLE (
   ret_visit_id UUID,
@@ -346,6 +347,7 @@ BEGIN
   INSERT INTO customer_visits (
     customer_id,
     seller_id,
+    visit_date,
     previous_balance,
     new_products_total,
     payment_amount,
@@ -356,6 +358,7 @@ BEGIN
   VALUES (
     p_customer_id,
     p_seller_id,
+    p_visit_date::timestamptz,
     v_previous_balance,
     v_new_products_total,
     p_payment_amount,
@@ -449,5 +452,152 @@ BEGIN
     v_new_products_total,
     p_payment_amount,
     v_new_balance;
+END;
+$$ LANGUAGE plpgsql;
+
+-- ============================================================
+-- Daily Stock System (added 2026-07-09)
+-- ============================================================
+
+-- daily_seller_stock tracks per-seller per-day inventory
+CREATE TABLE IF NOT EXISTS daily_seller_stock (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  seller_id UUID NOT NULL REFERENCES sellers(id),
+  product_id UUID NOT NULL REFERENCES products(id),
+  stock_date DATE NOT NULL DEFAULT CURRENT_DATE,
+  quantity_delivered INTEGER NOT NULL DEFAULT 0 CHECK (quantity_delivered >= 0),
+  quantity_sold INTEGER NOT NULL DEFAULT 0 CHECK (quantity_sold >= 0),
+  is_closed BOOLEAN NOT NULL DEFAULT false,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  CONSTRAINT uq_daily_stock UNIQUE (seller_id, product_id, stock_date),
+  CONSTRAINT chk_sold_not_exceed_delivered CHECK (quantity_sold <= quantity_delivered)
+);
+
+-- Add movement types (if not already present)
+DO $$
+BEGIN
+  IF NOT EXISTS (SELECT 1 FROM pg_enum WHERE enumtypid = 'inventory_movement_type'::regtype AND enumlabel = 'entrega_diaria_vendedor') THEN
+    ALTER TYPE inventory_movement_type ADD VALUE 'entrega_diaria_vendedor';
+  END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_enum WHERE enumtypid = 'inventory_movement_type'::regtype AND enumlabel = 'devolucion_stock_principal') THEN
+    ALTER TYPE inventory_movement_type ADD VALUE 'devolucion_stock_principal';
+  END IF;
+END $$;
+
+-- deliver_daily_stock: transfer from warehouse_stock to daily_seller_stock
+CREATE OR REPLACE FUNCTION deliver_daily_stock(
+  p_seller_id UUID,
+  p_product_id UUID,
+  p_quantity INTEGER,
+  p_stock_date DATE DEFAULT CURRENT_DATE,
+  p_notes TEXT DEFAULT NULL
+)
+RETURNS TABLE (
+  ret_seller_id UUID,
+  ret_product_id UUID,
+  ret_quantity_delivered INTEGER,
+  ret_remaining_warehouse INTEGER
+) AS $$
+DECLARE
+  v_product products%ROWTYPE;
+  v_warehouse_qty INTEGER;
+BEGIN
+  IF p_quantity <= 0 THEN
+    RAISE EXCEPTION 'La cantidad debe ser mayor a cero';
+  END IF;
+  SELECT * INTO v_product FROM products WHERE id = p_product_id AND is_active = true;
+  IF NOT FOUND THEN RAISE EXCEPTION 'Producto no existe o esta inactivo'; END IF;
+  SELECT COALESCE(quantity, 0) INTO v_warehouse_qty
+  FROM warehouse_stock WHERE product_id = p_product_id;
+  IF v_warehouse_qty < p_quantity THEN
+    RAISE EXCEPTION 'Stock en bodega insuficiente. Disponible: %, solicitado: %', v_warehouse_qty, p_quantity;
+  END IF;
+  UPDATE warehouse_stock SET quantity = quantity - p_quantity, updated_at = now()
+  WHERE product_id = p_product_id;
+  INSERT INTO daily_seller_stock (seller_id, product_id, stock_date, quantity_delivered)
+  VALUES (p_seller_id, p_product_id, p_stock_date, p_quantity)
+  ON CONFLICT (seller_id, product_id, stock_date)
+  DO UPDATE SET quantity_delivered = daily_seller_stock.quantity_delivered + EXCLUDED.quantity_delivered, updated_at = now();
+  INSERT INTO inventory_movements (seller_id, product_id, movement_type, quantity,
+    unit_investment_cost, unit_sale_price, notes)
+  VALUES (p_seller_id, p_product_id, 'entrega_diaria_vendedor', p_quantity,
+    v_product.investment_cost, v_product.sale_price, p_notes);
+  RETURN QUERY
+  SELECT dss.seller_id, dss.product_id, dss.quantity_delivered,
+         (SELECT ws.quantity FROM warehouse_stock ws WHERE ws.product_id = p_product_id)
+  FROM daily_seller_stock dss
+  WHERE dss.seller_id = p_seller_id AND dss.product_id = p_product_id AND dss.stock_date = p_stock_date;
+END;
+$$ LANGUAGE plpgsql;
+
+-- close_seller_day: close day, return unsold to warehouse
+CREATE OR REPLACE FUNCTION close_seller_day(
+  p_seller_id UUID,
+  p_stock_date DATE DEFAULT CURRENT_DATE
+)
+RETURNS TABLE (
+  product_id UUID,
+  product_name VARCHAR,
+  delivered INTEGER,
+  sold INTEGER,
+  returned_to_warehouse INTEGER
+) AS $$
+DECLARE
+  v_rec RECORD;
+  v_unsold INTEGER;
+BEGIN
+  FOR v_rec IN
+    SELECT dss.*, p.name AS pname
+    FROM daily_seller_stock dss
+    JOIN products p ON p.id = dss.product_id
+    WHERE dss.seller_id = p_seller_id AND dss.stock_date = p_stock_date AND dss.is_closed = false
+  LOOP
+    v_unsold := v_rec.quantity_delivered - v_rec.quantity_sold;
+    IF v_unsold > 0 THEN
+      UPDATE warehouse_stock SET quantity = quantity + v_unsold, updated_at = now()
+      WHERE product_id = v_rec.product_id;
+    END IF;
+    UPDATE daily_seller_stock SET is_closed = true, updated_at = now() WHERE id = v_rec.id;
+    IF v_unsold > 0 THEN
+      INSERT INTO inventory_movements (seller_id, product_id, movement_type, quantity,
+        unit_investment_cost, unit_sale_price, notes)
+      VALUES (p_seller_id, v_rec.product_id, 'devolucion_stock_principal', v_unsold,
+        (SELECT investment_cost FROM products WHERE id = v_rec.product_id),
+        (SELECT sale_price FROM products WHERE id = v_rec.product_id),
+        'Devolución al cerrar día ' || p_stock_date);
+    END IF;
+    product_id := v_rec.product_id;
+    product_name := v_rec.pname;
+    delivered := v_rec.quantity_delivered;
+    sold := v_rec.quantity_sold;
+    returned_to_warehouse := v_unsold;
+    RETURN NEXT;
+  END LOOP;
+  IF NOT FOUND THEN
+    RAISE EXCEPTION 'No hay stock diario abierto para el vendedor en la fecha %', p_stock_date;
+  END IF;
+END;
+$$ LANGUAGE plpgsql;
+
+-- auto_close_old_days: close all unclosed days before today
+CREATE OR REPLACE FUNCTION auto_close_old_days()
+RETURNS TABLE (seller_id UUID, seller_name VARCHAR, stock_date DATE, products_closed INTEGER) AS $$
+DECLARE
+  v_rec RECORD;
+  v_total INTEGER;
+BEGIN
+  FOR v_rec IN
+    SELECT DISTINCT dss.seller_id, s.name AS sname, dss.stock_date
+    FROM daily_seller_stock dss JOIN sellers s ON s.id = dss.seller_id
+    WHERE dss.is_closed = false AND dss.stock_date < CURRENT_DATE
+    ORDER BY dss.seller_id, dss.stock_date
+  LOOP
+    WITH closed AS (SELECT * FROM close_seller_day(v_rec.seller_id, v_rec.stock_date))
+    SELECT COUNT(*) INTO v_total FROM closed;
+    seller_id := v_rec.seller_id; seller_name := v_rec.sname;
+    stock_date := v_rec.stock_date; products_closed := v_total;
+    RETURN NEXT;
+  END LOOP;
 END;
 $$ LANGUAGE plpgsql;

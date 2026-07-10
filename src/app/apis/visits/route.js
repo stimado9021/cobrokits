@@ -7,6 +7,8 @@ export async function GET(request) {
     const { searchParams } = new URL(request.url);
     const customerId = searchParams.get("customerId");
     const sellerId = searchParams.get("sellerId");
+    const dateFrom = searchParams.get("dateFrom");
+    const dateTo = searchParams.get("dateTo");
     const visits = await query(
       `
         SELECT
@@ -29,10 +31,11 @@ export async function GET(request) {
         ) items ON items.visit_id = cv.id
         WHERE ($1::uuid IS NULL OR cv.customer_id = $1::uuid)
           AND ($2::uuid IS NULL OR cv.seller_id = $2::uuid)
+          AND ($3::date IS NULL OR cv.visit_date::date >= $3::date)
+          AND ($4::date IS NULL OR cv.visit_date::date < $4::date)
         ORDER BY cv.visit_date DESC, cv.created_at DESC
-        LIMIT 100
       `,
-      [customerId, sellerId],
+      [customerId, sellerId, dateFrom, dateTo],
     );
     return ok({ visits });
   } catch (error) {
@@ -52,7 +55,8 @@ export async function POST(request) {
           $3::jsonb,
           $4::numeric,
           $5::cobrokits.payment_method,
-          $6::text
+          $6::text,
+          $7::date
         )
       `,
       [
@@ -62,6 +66,7 @@ export async function POST(request) {
         Number(body.payment_amount || 0),
         body.payment_method || null,
         body.notes || null,
+        body.visit_date || null,
       ],
     );
     return ok({ visit }, { status: 201 });

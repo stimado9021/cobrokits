@@ -61,6 +61,7 @@ export default function Home() {
   
   const [activeTab, setActiveTab] = useState("dashboard");
   const [visitFormKey, setVisitFormKey] = useState(0);
+  const [entregarFormKey, setEntregarFormKey] = useState(0);
 
   const [visitItems, setVisitItems] = useState([]);
   const [currentProductId, setCurrentProductId] = useState("");
@@ -123,6 +124,9 @@ export default function Home() {
   async function loadAll() {
     setLoading(true);
     try {
+      // Auto-close any open daily stock from previous days
+      try { await api("/apis/daily-stock", { method: "POST", body: JSON.stringify({ action: "auto_close" }) }); } catch { /* ignore */ }
+
       const [dashboardData, sellersData, productsData, customersData, inventoryData, visitsData] = await Promise.all([
         api("/apis/dashboard"),
         api("/apis/sellers"),
@@ -137,7 +141,13 @@ export default function Home() {
       setCustomers(customersData.customers);
       setInventory(inventoryData.inventory);
       setVisits(visitsData.visits);
-      setActiveSellerId((current) => current || sellersData.sellers[0]?.id || "");
+      setActiveSellerId((current) => {
+        if (current) return current;
+        const firstWithVisits = sellersData.sellers.find((s) =>
+          visitsData.visits?.some((v) => v.seller_id === s.id)
+        );
+        return firstWithVisits?.id || sellersData.sellers[0]?.id || "";
+      });
     } catch (error) {
       setNotice(error.message);
     } finally {
@@ -259,30 +269,36 @@ export default function Home() {
     }
   }
 
-  async function deliverInventory(event) {
+  async function deliverDailyStock(event) {
     event.preventDefault();
     if (isSubmitting) return;
-    
+
     const formElement = event.currentTarget;
     const form = new FormData(formElement);
-    
+
     if (deliveryItems.length === 0) {
-      setNotice("Agrega al menos un producto al inventario");
+      setNotice("Agrega al menos un producto");
       return;
     }
 
     setIsSubmitting(true);
     try {
-      await api("/apis/inventory", {
-        method: "POST",
-        body: JSON.stringify({
-          seller_id: form.get("seller_id"),
-          items: deliveryItems,
-        }),
-      });
+      const sellerId = form.get("seller_id");
+      for (const item of deliveryItems) {
+        await api("/apis/daily-stock", {
+          method: "POST",
+          body: JSON.stringify({
+            action: "deliver",
+            seller_id: sellerId,
+            product_id: item.product_id,
+            quantity: Number(item.quantity),
+          }),
+        });
+      }
       formElement.reset();
       setDeliveryItems([]);
-      setNotice("Inventario entregado");
+      setNotice("Stock diario entregado");
+      setEntregarFormKey(k => k + 1);
       await loadAll();
     } catch (e) {
       setNotice(e.message);
@@ -298,6 +314,8 @@ export default function Home() {
     const formElement = event.currentTarget;
     const form = new FormData(formElement);
     try {
+      const hoy = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Bogota" }).format(new Date());
+
       await api("/apis/visits", {
         method: "POST",
         body: JSON.stringify({
@@ -307,6 +325,7 @@ export default function Home() {
           payment_amount: form.get("payment_amount") || 0,
           payment_method: form.get("payment_method") || null,
           notes: form.get("notes"),
+          visit_date: hoy,
         }),
       });
       formElement.reset();
@@ -457,7 +476,8 @@ export default function Home() {
         }
         {activeTab === 'entregar-inventario' && 
           <EntregarInventario 
-            deliverInventory={deliverInventory}
+            key={entregarFormKey}
+            deliverDailyStock={deliverDailyStock}
             sellers={sellers}
             activeSellerId={activeSellerId}
             products={products}
@@ -468,7 +488,6 @@ export default function Home() {
             addDeliveryItem={addDeliveryItem}
             deliveryItems={deliveryItems}
             removeDeliveryItem={removeDeliveryItem}
-            inventory={inventory}
             formatMoney={formatMoney}
             isSubmitting={isSubmitting}
           />

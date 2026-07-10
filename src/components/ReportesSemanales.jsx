@@ -71,21 +71,18 @@ const METHOD_LABELS = { efectivo: "Efectivo", nequi: "Nequi", cash: "Efectivo", 
 
 /* ─── Row definitions (matches the physical ledger) ───── */
 const ROWS = [
-  { key: "cartera",             label: "Suma (Cartera)",       type: "money",   editable: false, desc: "Cartera total activa en la calle" },
-  { key: "clientes_abonaron",   label: "Abn (Abonaron)",       type: "number",  editable: false, desc: "Clientes que pagaron ese día" },
-  { key: "clientes_no_llevaron",label: "CNL (Llevaron)",       type: "number",  editable: false, desc: "Cantidad de productos dejados ese dia" },
+  { key: "suma_entrega",        label: "Suma Ventas",          type: "money",   editable: false, desc: "Ventas nuevas dejadas en crédito" },
+  { key: "abono_total",         label: "Abn (Abonaron)",       type: "money",   editable: false, desc: "Total recibido en abonos ese día (Efectivo + Nequi)" },
+  { key: "clientes_no_llevaron",label: "CNL (Canceladas)",     type: "number",  editable: false, desc: "Clientes que pagaron todo y su saldo quedó en 0 ese día" },
   { key: "visitas_totales",     label: "UV (Visitas)",         type: "number",  editable: false, desc: "Total de clientes atendidos" },
   { key: "efectividad_pct",     label: "% Efectividad",        type: "percent", editable: false, desc: "Visitas / clientes activos totales" },
   { key: "m1_efectivo",         label: "m1 (Efectivo)",        type: "money",   editable: false, desc: "Recaudo en efectivo" },
   { key: "m2_nequi",            label: "M2 (Nequi)",           type: "money",   editable: false, desc: "Recaudo por Nequi" },
-  { key: "abono_total",         label: "Abono Total",          type: "money",   editable: false, desc: "m1 + M2", highlight: "computed" },
-  { key: "cnt_notes",           label: "CNT (Novedades)",      type: "text",    editable: true,  desc: "Observaciones del día" },
-  { key: "suma_entrega",        label: "Suma Ventas",          type: "money",   editable: false, desc: "Ventas nuevas dejadas en crédito" },
-  { key: "abono_total2",        label: "Total (Recaudo)",      type: "money",   editable: false, desc: "= Abono total del día", highlight: "computed" },
   { key: "gasto",               label: "Gasto",                type: "money",   editable: true,  desc: "Gasolina, almuerzo, viáticos…" },
   { key: "d1",                  label: "D1",                   type: "money_signed", editable: true, desc: "Diferencia / ajuste de caja" },
   { key: "d2",                  label: "D2",                   type: "money_signed", editable: true, desc: "Diferencia / ajuste de inventario" },
   { key: "dinero_a_entregar",   label: "$ (A entregar)",       type: "money",   editable: false, desc: "Abono – Gasto ± D1 ± D2", highlight: "computed" },
+  { key: "cnt_notes",           label: "CNT (Novedades)",      type: "text",    editable: true,  desc: "Observaciones del día" },
   { key: "ganancia",            label: "Ganancia",             type: "money",   editable: false, desc: "Entrega – Inversión + Abono – Gasto", highlight: "profit" },
 ];
 
@@ -129,7 +126,7 @@ export function ReportesSemanales({ activeSellerId = "", activeSellerName = "Tod
       const res = await fetch(`/apis/weekly-report?${params.toString()}`);
       const data = await res.json();
       if (data.success) {
-        setDays(data.days.length === 7 ? data.days : data.days);
+        setDays(data.days);
         setCarteraActual(n(data.cartera_actual));
       }
     } catch { /* silent */ }
@@ -137,12 +134,17 @@ export function ReportesSemanales({ activeSellerId = "", activeSellerName = "Tod
   }, [activeSellerId]);
 
   /* Load visits for the week */
-  const loadVisits = useCallback(async () => {
+  const loadVisits = useCallback(async (weekStartDate) => {
     setVisitsLoading(true);
     try {
-      const params = new URLSearchParams();
+      if (!weekStartDate) { setVisitsLoading(false); return; }
+      const weekEndDate = addDays(weekStartDate, 7);
+      const params = new URLSearchParams({
+        dateFrom: toISODate(weekStartDate),
+        dateTo: toISODate(weekEndDate),
+      });
       if (activeSellerId) params.set("sellerId", activeSellerId);
-      const res = await fetch(`/apis/visits${params.toString() ? `?${params.toString()}` : ""}`);
+      const res = await fetch(`/apis/visits?${params.toString()}`);
       const data = await res.json();
       if (data.success) setVisits(data.visits || []);
     } catch { /* silent */ }
@@ -151,7 +153,7 @@ export function ReportesSemanales({ activeSellerId = "", activeSellerName = "Tod
 
   useEffect(() => {
     loadWeek(weekStart);
-    loadVisits();
+    loadVisits(weekStart);
   }, [loadWeek, loadVisits, weekStart]);
 
   function prevWeek() { setWeekStart(w => addDays(w, -7)); }
@@ -199,8 +201,6 @@ export function ReportesSemanales({ activeSellerId = "", activeSellerName = "Tod
   /* Compute column totals */
   const totals = ROWS.reduce((acc, row) => {
     if (row.type === "text") { acc[row.key] = ""; return acc; }
-    if (row.key === "cartera") { acc[row.key] = carteraActual; return acc; }
-    if (row.key === "abono_total2") { acc[row.key] = days.reduce((s, d) => s + n(d.abono_total), 0); return acc; }
     acc[row.key] = days.reduce((s, d) => s + n(d[row.key] ?? 0), 0);
     return acc;
   }, {});
@@ -215,7 +215,7 @@ export function ReportesSemanales({ activeSellerId = "", activeSellerName = "Tod
   /* Render a cell value */
   function renderCell(row, dayData, dayIdx) {
     const key = row.key;
-    const rawVal = key === "cartera" ? carteraActual : (key === "abono_total2" ? dayData?.abono_total : dayData?.[key]);
+    const rawVal = dayData?.[key];
     const isEditing = editing?.dayIdx === dayIdx && editing?.key === key;
 
     if (row.editable && isEditing) {
@@ -387,7 +387,7 @@ export function ReportesSemanales({ activeSellerId = "", activeSellerName = "Tod
         <div className="visits-panel">
           <div className="visits-panel-header">
             <h3>Visitas de la semana</h3>
-            <button className="iconButton" onClick={loadVisits} disabled={visitsLoading} title="Actualizar">
+            <button className="iconButton" onClick={() => loadVisits(weekStart)} disabled={visitsLoading} title="Actualizar">
               <RefreshCcw size={15} className={visitsLoading ? "spin" : ""} />
             </button>
           </div>

@@ -1,3 +1,4 @@
+import { useState, useEffect, useMemo, useRef } from "react";
 import { ClipboardList, PackagePlus, Save } from "lucide-react";
 
 export function RegistrarVisita({ 
@@ -19,9 +20,102 @@ export function RegistrarVisita({
   visits = [],
   activeSellerName = "Todos los vendedores",
 }) {
-  const sellerVisits = visits
-    .filter((visit) => !activeSellerId || visit.seller_id === activeSellerId)
-    .sort((a, b) => new Date(b.visit_date) - new Date(a.visit_date));
+  const today = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Bogota" }).format(new Date());
+  const [selectedDate, setSelectedDate] = useState(today);
+
+  const sellerVisits = useMemo(
+    () => visits
+      .filter((visit) => !activeSellerId || visit.seller_id === activeSellerId)
+      .sort((a, b) => new Date(b.visit_date) - new Date(a.visit_date)),
+    [visits, activeSellerId]
+  );
+
+  const availableDates = useMemo(() => {
+    const dates = new Set();
+    sellerVisits.forEach((v) => {
+      const d = v.visit_date ? v.visit_date.slice(0, 10) : "";
+      if (d) dates.add(d);
+    });
+    return Array.from(dates).sort((a, b) => b.localeCompare(a));
+  }, [sellerVisits]);
+
+  useEffect(() => {
+    if (selectedDate && !availableDates.includes(selectedDate)) {
+      setSelectedDate(availableDates[0] || today);
+    }
+  }, [availableDates, selectedDate, today]);
+
+  const filteredVisits = useMemo(
+    () => sellerVisits.filter((v) => {
+      const vd = v.visit_date ? v.visit_date.slice(0, 10) : "";
+      return vd === selectedDate;
+    }),
+    [sellerVisits, selectedDate]
+  );
+
+  const dailyPayments = useMemo(() => {
+    const map = {};
+    sellerVisits.forEach((v) => {
+      const d = v.visit_date ? v.visit_date.slice(0, 10) : "";
+      if (d) map[d] = (map[d] || 0) + Number(v.payment_total || 0);
+    });
+    return map;
+  }, [sellerVisits]);
+
+  const [dailyStockItems, setDailyStockItems] = useState([]);
+
+  useEffect(() => {
+    if (!activeSellerId) { setDailyStockItems([]); return; }
+
+    let cancelled = false;
+
+    async function loadDailyStock() {
+      try {
+        const params = new URLSearchParams({ sellerId: activeSellerId, stockDate: today });
+        const res = await fetch(`/apis/daily-stock?${params.toString()}`);
+        const data = await res.json();
+        if (!cancelled && data.success) setDailyStockItems(data.items || []);
+      } catch {
+        if (!cancelled) setDailyStockItems([]);
+      }
+    }
+
+    loadDailyStock();
+    return () => { cancelled = true; };
+  }, [activeSellerId, today]);
+
+  const timerRef = useRef(null);
+
+  const stockMap = useMemo(() => {
+    const map = {};
+    dailyStockItems.forEach((i) => {
+      map[i.product_id] = Number(i.quantity_delivered) - Number(i.quantity_sold);
+    });
+    return map;
+  }, [dailyStockItems]);
+
+  const hasStock = useMemo(() => {
+    if (!activeSellerId || !currentProductId) return true;
+    return (stockMap[currentProductId] ?? 0) > 0;
+  }, [activeSellerId, currentProductId, stockMap]);
+
+  const [showWarning, setShowWarning] = useState(false);
+
+  const hasAnyStock = useMemo(
+    () => Object.values(stockMap).some((q) => q > 0),
+    [stockMap]
+  );
+
+  useEffect(() => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+    if (!hasStock) {
+      setShowWarning(true);
+      timerRef.current = setTimeout(() => setShowWarning(false), 5000);
+    } else {
+      setShowWarning(false);
+    }
+    return () => { if (timerRef.current) clearTimeout(timerRef.current); };
+  }, [hasStock]);
 
   return (
     <section className="registrar-visita-layout">
@@ -51,26 +145,39 @@ export function RegistrarVisita({
             </option>
           ))}
         </select>
+        {!hasAnyStock && activeSellerId && (
+          <div className="notice" style={{ border: "1px solid rgba(239,68,68,0.3)", background: "rgba(239,68,68,0.1)", color: "var(--red)", margin: "0" }}>
+            Vendedor sin inventario hoy. Asígnele productos en la pestaña "Entregar Inventario" primero.
+          </div>
+        )}
         <div className="row">
           <select value={currentProductId} onChange={e => setCurrentProductId(e.target.value)}>
             <option value="">Producto dejado</option>
-            {products.map((product) => (
-              <option key={product.id} value={product.id}>
-                {product.name}
-              </option>
-            ))}
+            {products.map((product) => {
+              const qty = stockMap[product.id] ?? 0;
+              return (
+                <option key={product.id} value={product.id}>
+                  {product.name} ({qty} uds{qty === 0 ? " · sin stock" : ""})
+                </option>
+              );
+            })}
           </select>
           <input value={currentQuantity} onChange={e => setCurrentQuantity(e.target.value)} type="number" min="0" placeholder="Cant." style={{width: "70px"}} />
           <button type="button" className="iconButton" onClick={addVisitItem} title="Agregar a la visita" disabled={isSubmitting}>
             <PackagePlus size={18} />
           </button>
         </div>
+        {showWarning && (
+          <div className="notice" style={{ border: "1px solid rgba(245,158,11,0.3)", background: "rgba(245,158,11,0.1)", color: "var(--accent)", margin: "0" }}>
+            No hay suficientes existencias de este producto en el inventario del vendedor.
+          </div>
+        )}
         {visitItems.length > 0 && (
-          <div style={{display: 'flex', flexDirection: 'column', gap: '4px', marginBottom: '10px', fontSize: '0.9rem', padding: '8px', background: 'var(--color-bg-alt, #f5f5f5)', borderRadius: '4px'}}>
+          <div className="pending-items">
             {visitItems.map(item => (
-              <div key={item.product_id} style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
+              <div key={item.product_id} className="pending-item">
                 <span>{item.quantity}x {item.name}</span>
-                <button type="button" onClick={() => removeVisitItem(item.product_id)} style={{background: 'none', border: 'none', color: '#ff4444', cursor: 'pointer'}}>✕</button>
+                <button type="button" className="text-danger-button" onClick={() => removeVisitItem(item.product_id)}>✕</button>
               </div>
             ))}
           </div>
@@ -100,21 +207,44 @@ export function RegistrarVisita({
         </div>
 
         <div className="visitas-table-wrap">
+          {availableDates.length > 0 && (
+            <div className="date-filter-row">
+              <select
+                value={selectedDate}
+                onChange={(e) => setSelectedDate(e.target.value)}
+              >
+                {availableDates.map((d) => (
+                  <option key={d} value={d}>
+                    {d === today
+                      ? "Hoy"
+                      : new Date(d + "T00:00:00").toLocaleDateString("es-CO", {
+                          weekday: "long",
+                          day: "numeric",
+                          month: "long",
+                          year: "numeric",
+                        })}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
           <table className="visitas-table">
             <thead>
               <tr>
                 <th>Cliente</th>
+                <th>Anterior</th>
                 <th>Venta</th>
                 <th>Abono</th>
+                <th>Deuda</th>
               </tr>
             </thead>
             <tbody>
-              {sellerVisits.length === 0 ? (
+              {filteredVisits.length === 0 ? (
                 <tr>
-                  <td colSpan="3" className="empty-cell">Sin visitas registradas</td>
+                  <td colSpan="5" className="empty-cell">Sin visitas en esta fecha</td>
                 </tr>
               ) : (
-                sellerVisits.map((visit) => (
+                filteredVisits.map((visit) => (
                   <tr key={visit.id}>
                     <td>
                       <strong>{visit.customer_name}</strong>
@@ -123,8 +253,10 @@ export function RegistrarVisita({
                         {visit.products_summary || "Sin producto nuevo"}
                       </span>
                     </td>
+                    <td className="money-cell">{formatMoney(visit.previous_balance)}</td>
                     <td className="money-cell">{formatMoney(visit.sale_total)}</td>
                     <td className="money-cell">{formatMoney(visit.payment_total)}</td>
+                    <td className="money-cell">{formatMoney(visit.new_balance)}</td>
                   </tr>
                 ))
               )}

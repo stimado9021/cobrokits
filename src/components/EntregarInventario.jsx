@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { PackagePlus } from "lucide-react";
+import { PackagePlus, RotateCcw, Calendar } from "lucide-react";
 
 function toLocalISODate(date) {
   const offsetDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
@@ -7,7 +7,7 @@ function toLocalISODate(date) {
 }
 
 export function EntregarInventario({
-  deliverInventory,
+  deliverDailyStock,
   sellers,
   activeSellerId,
   products,
@@ -22,115 +22,135 @@ export function EntregarInventario({
   isSubmitting,
 }) {
   const [selectedSellerId, setSelectedSellerId] = useState(activeSellerId || "");
-  const [todayMovements, setTodayMovements] = useState([]);
-  const [movementsLoading, setMovementsLoading] = useState(false);
+  const [dailyItems, setDailyItems] = useState([]);
+  const [warehouseStock, setWarehouseStock] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [closing, setClosing] = useState(false);
+  const [closeResult, setCloseResult] = useState(null);
   const todayDate = useMemo(() => toLocalISODate(new Date()), []);
+  const [viewDate, setViewDate] = useState(todayDate);
+  const [availableDates, setAvailableDates] = useState([]);
 
   useEffect(() => {
     setSelectedSellerId(activeSellerId || "");
   }, [activeSellerId]);
 
+  // Load available dates for the seller
   useEffect(() => {
-    if (!selectedSellerId || isSubmitting) return;
+    if (!selectedSellerId) { setAvailableDates([]); return; }
+
+    let cancelled = false;
+    async function loadDates() {
+      try {
+        const res = await fetch(`/apis/daily-stock?sellerId=${selectedSellerId}`);
+        const data = await res.json();
+        if (!cancelled && data.success) {
+          const dates = [...new Set(data.items.map(i => i.stock_date?.slice(0, 10)).filter(Boolean))].sort((a, b) => b.localeCompare(a));
+          setAvailableDates(dates);
+        }
+      } catch {
+        if (!cancelled) setAvailableDates([]);
+      }
+    }
+    loadDates();
+    return () => { cancelled = true; };
+  }, [selectedSellerId]);
+
+  // Use todayDate for delivery, viewDate for display
+  const effectiveDate = viewDate;
+
+  // Load warehouse stock and daily stock for the view date
+  useEffect(() => {
+    if (!selectedSellerId) { setDailyItems([]); return; }
 
     let cancelled = false;
 
-    async function loadTodayMovements() {
-      setMovementsLoading(true);
+    async function loadData() {
+      setLoading(true);
       try {
-        const params = new URLSearchParams({
-          sellerId: selectedSellerId,
-          date: todayDate,
-        });
-        const response = await fetch(`/apis/inventory/movements?${params.toString()}`);
-        const data = await response.json();
-        if (!cancelled && data.success) {
-          setTodayMovements(data.movements || []);
+        const [wsRes, dsRes] = await Promise.all([
+          fetch("/apis/general-stock"),
+          fetch(`/apis/daily-stock?sellerId=${selectedSellerId}&stockDate=${effectiveDate}`),
+        ]);
+        const wsData = await wsRes.json();
+        const dsData = await dsRes.json();
+        if (!cancelled) {
+          if (wsData.success) setWarehouseStock(wsData.inventory || []);
+          if (dsData.success) setDailyItems(dsData.items || []);
         }
       } catch {
-        if (!cancelled) setTodayMovements([]);
+        if (!cancelled) { setWarehouseStock([]); setDailyItems([]); }
       } finally {
-        if (!cancelled) setMovementsLoading(false);
+        if (!cancelled) setLoading(false);
       }
     }
 
-    loadTodayMovements();
+    loadData();
+    return () => { cancelled = true; };
+  }, [selectedSellerId, effectiveDate]);
 
-    return () => {
-      cancelled = true;
-    };
-  }, [isSubmitting, selectedSellerId, todayDate]);
+  const busy = isSubmitting || closing;
 
-  const busy = isSubmitting;
-  const selectedSellerName = useMemo(
-    () => sellers.find((seller) => seller.id === selectedSellerId)?.name || "vendedor",
-    [sellers, selectedSellerId],
-  );
-  const todayLabel = useMemo(
-    () =>
-      new Intl.DateTimeFormat("es-CO", {
-        day: "2-digit",
-        month: "2-digit",
-        year: "numeric",
-      }).format(new Date()),
-    [],
-  );
-  const todayDeliveryRows = useMemo(() => {
+  const whMap = useMemo(() => {
+    const map = {};
+    warehouseStock.forEach((i) => { map[i.id] = Number(i.quantity); });
+    return map;
+  }, [warehouseStock]);
+
+  const isPastDay = viewDate < todayDate;
+  const isToday = viewDate === todayDate;
+
+  const dailyRows = useMemo(() => {
     const rowsByProduct = new Map();
 
-    todayMovements.forEach((movement) => {
-      const existing = rowsByProduct.get(movement.product_id);
-      const quantity = Number(movement.quantity || 0);
-      const salePrice = Number(movement.unit_sale_price || 0);
-
-      rowsByProduct.set(movement.product_id, {
-        id: movement.product_id,
-        product_id: movement.product_id,
-        product_name: movement.product_name,
-        quantity: (existing?.quantity || 0) + quantity,
-        sale_price: salePrice || existing?.sale_price || 0,
-        sold_quantity: existing?.sold_quantity ?? Number(movement.sold_quantity || 0),
-        sold_total: existing?.sold_total ?? Number(movement.sold_total || 0),
-      });
-    });
-
-    deliveryItems.forEach((item) => {
-      const product = products.find((current) => current.id === item.product_id);
-      const existing = rowsByProduct.get(item.product_id);
-      const quantity = Number(item.quantity || 0);
-
-      if (existing) {
-        rowsByProduct.set(item.product_id, {
-          ...existing,
-          quantity: existing.quantity + quantity,
-        });
-        return;
-      }
-
+    dailyItems.forEach((item) => {
+      const delivered = Number(item.quantity_delivered);
+      const sold = Number(item.quantity_sold);
       rowsByProduct.set(item.product_id, {
-        id: `pending-${item.product_id}`,
         product_id: item.product_id,
-        product_name: item.name,
-        quantity,
-        sale_price: Number(product?.sale_price || 0),
-        sold_quantity: 0,
-        sold_total: 0,
+        product_name: item.product_name,
+        delivered,
+        sold,
+        remaining: delivered - sold,
+        sale_price: Number(item.sale_price),
+        is_closed: item.is_closed,
       });
     });
 
-    return Array.from(rowsByProduct.values())
-      .map((item) => ({
-        ...item,
-        remaining_quantity: Math.max(Number(item.quantity || 0) - Number(item.sold_quantity || 0), 0),
-      }))
-      .sort((a, b) => a.product_name.localeCompare(b.product_name));
-  }, [deliveryItems, products, todayMovements]);
+    return Array.from(rowsByProduct.values()).sort((a, b) => a.product_name.localeCompare(b.product_name));
+  }, [dailyItems]);
+
+  async function handleCloseDay() {
+    if (!selectedSellerId || closing) return;
+    setClosing(true);
+    setCloseResult(null);
+    try {
+      const res = await fetch("/apis/daily-stock", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "close_day", seller_id: selectedSellerId, stock_date: todayDate }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setCloseResult(data.closed);
+        const dsRes = await fetch(`/apis/daily-stock?sellerId=${selectedSellerId}&stockDate=${todayDate}`);
+        const dsData = await dsRes.json();
+        if (dsData.success) setDailyItems(dsData.items || []);
+      } else {
+        setCloseResult({ error: data.message || "Error al cerrar día" });
+      }
+    } catch (e) {
+      setCloseResult({ error: e.message });
+    } finally {
+      setClosing(false);
+    }
+  }
 
   return (
     <section className="workgrid">
-      <form className="panel" onSubmit={deliverInventory}>
+      <form className="panel" onSubmit={deliverDailyStock}>
         <div className="panelHead">
-          <h2>Entregar inventario</h2>
+          <h2>Entregar inventario diario</h2>
           <PackagePlus size={18} />
         </div>
         <select
@@ -152,11 +172,14 @@ export function EntregarInventario({
             onChange={(event) => setCurrentDeliveryProductId(event.target.value)}
           >
             <option value="">Producto</option>
-            {products.map((product) => (
-              <option key={product.id} value={product.id}>
-                {product.name}
-              </option>
-            ))}
+            {products.map((product) => {
+              const whQty = whMap[product.id] ?? 0;
+              return (
+                <option key={product.id} value={product.id}>
+                  {product.name} (bodega: {whQty} uds)
+                </option>
+              );
+            })}
           </select>
           <input
             value={currentDeliveryQuantity}
@@ -166,13 +189,7 @@ export function EntregarInventario({
             placeholder="Cant."
             style={{ width: "70px" }}
           />
-          <button
-            type="button"
-            className="iconButton"
-            onClick={addDeliveryItem}
-            title="Agregar al inventario"
-            disabled={busy}
-          >
+          <button type="button" className="iconButton" onClick={addDeliveryItem} title="Agregar" disabled={busy}>
             <PackagePlus size={18} />
           </button>
         </div>
@@ -180,21 +197,13 @@ export function EntregarInventario({
           <div className="pending-items">
             {deliveryItems.map((item) => (
               <div key={item.product_id} className="pending-item">
-                <span>
-                  {item.quantity}x {item.name}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => removeDeliveryItem(item.product_id)}
-                  className="text-danger-button"
-                >
-                  x
-                </button>
+                <span>{item.quantity}x {item.name}</span>
+                <button type="button" onClick={() => removeDeliveryItem(item.product_id)} className="text-danger-button">x</button>
               </div>
             ))}
           </div>
         )}
-        <button className="primary" type="submit" disabled={busy}>
+        <button className="primary" type="submit" disabled={busy || !isToday}>
           {busy ? <span className="spinner" /> : <PackagePlus size={17} />}
           {busy ? "Entregando..." : "Entregar"}
         </button>
@@ -202,43 +211,81 @@ export function EntregarInventario({
 
       {selectedSellerId && (
         <div className="panel inventory-preview-panel">
-          <div className="panelHead inventory-day-head">
+          <div className="panelHead inventory-day-head" style={{ justifyContent: "space-between" }}>
             <h2>
-              Entregas de hoy para <span>{selectedSellerName}</span>
+              Stock para <span>{sellers.find(s => s.id === selectedSellerId)?.name || "vendedor"}</span>
             </h2>
-            <strong>{todayLabel}</strong>
+            <div className="row" style={{ gap: "8px", margin: 0 }}>
+              <Calendar size={14} />
+              <select
+                value={viewDate}
+                onChange={(e) => setViewDate(e.target.value)}
+                style={{ width: "150px", fontSize: "13px", padding: "4px", backgroundColor: "var(--surface-2)", color: "var(--text)" }}
+              >
+                {!availableDates.includes(todayDate) && (
+                  <option value={todayDate}>Hoy ({todayDate})</option>
+                )}
+                {availableDates.map((d) => (
+                  <option key={d} value={d}>
+                    {d === todayDate ? `Hoy (${d})` : `Historial: ${d}`}
+                  </option>
+                ))}
+              </select>
+              {isToday && dailyRows.length > 0 && !dailyRows.every(r => r.is_closed) && (
+                <button
+                  type="button"
+                  className="primary"
+                  style={{ padding: "4px 12px", fontSize: "13px" }}
+                  onClick={handleCloseDay}
+                  disabled={closing}
+                >
+                  {closing ? <span className="spinner" /> : <RotateCcw size={14} />}
+                  {closing ? "Cerrando..." : "Cerrar día"}
+                </button>
+              )}
+            </div>
           </div>
-          {movementsLoading ? (
-            <p>Cargando entregas de hoy...</p>
-          ) : todayDeliveryRows.length > 0 ? (
+
+          {isPastDay && <p style={{ fontSize: "13px", color: "var(--text-dim)", marginBottom: "8px" }}>Vista histórica (solo lectura)</p>}
+
+          {closeResult && !closeResult.error && closeResult.length > 0 && (
+            <div className="notice" style={{ marginBottom: "8px" }}>
+              Día cerrado. {closeResult.map(r => `${r.out_product_name}: ${r.out_returned_to_warehouse} uds devueltas`).join(", ")}
+            </div>
+          )}
+          {closeResult?.error && (
+            <div className="notice" style={{ marginBottom: "8px", color: "var(--red)" }}>
+              {closeResult.error}
+            </div>
+          )}
+
+          {loading ? (
+            <p>Cargando...</p>
+          ) : dailyRows.length > 0 ? (
             <table className="dataTable">
               <thead>
                 <tr>
                   <th>Producto</th>
-                  <th>Cantidad entregada</th>
-                  <th>Stock restante</th>
-                  <th>Producto vendido</th>
-                  <th>Total vendido</th>
-                  <th>Precio unidad</th>
-                  <th>Total entregado</th>
+                  <th>Entregado</th>
+                  <th>Vendido</th>
+                  <th>Disponible</th>
+                  {(isPastDay || dailyRows.some(r => r.is_closed)) && <th>Devuelto</th>}
                 </tr>
               </thead>
               <tbody>
-                {todayDeliveryRows.map((item) => (
-                  <tr key={item.id}>
-                    <td>{item.product_name}</td>
-                    <td>{item.quantity}</td>
-                    <td>{item.remaining_quantity}</td>
-                    <td>{item.sold_quantity}</td>
-                    <td>{formatMoney(item.sold_total)}</td>
-                    <td>{formatMoney(item.sale_price)}</td>
-                    <td>{formatMoney(item.quantity * item.sale_price)}</td>
+                {dailyRows.map((item) => (
+                  <tr key={item.product_id} style={{ opacity: item.is_closed ? 0.6 : 1 }}>
+                    <td>{item.product_name} {item.is_closed && <span style={{fontSize:'10px', color:'var(--brand)', marginLeft:'4px'}}>(Cerrado)</span>}</td>
+                    <td>{item.delivered}</td>
+                    <td>{item.sold}</td>
+                    <td>{item.is_closed ? 0 : item.remaining}</td>
+                    {(isPastDay || dailyRows.some(r => r.is_closed)) && <td>{item.is_closed ? item.remaining : 0}</td>}
                   </tr>
                 ))}
               </tbody>
             </table>
           ) : (
-            <p>No hay entregas de productos registradas hoy para este vendedor.</p>
+            <p>No hay registros de stock para esta fecha.</p>
           )}
         </div>
       )}

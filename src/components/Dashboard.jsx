@@ -7,7 +7,7 @@ function SkeletonLine({ width = "60%", height = "1.2rem" }) {
       width,
       height,
       borderRadius: "6px",
-      background: "linear-gradient(90deg, #e5e7e6 25%, #f0f2f0 50%, #e5e7e6 75%)",
+      background: "linear-gradient(90deg, #222 25%, #2d2d2d 50%, #222 75%)",
       backgroundSize: "200% 100%",
       animation: "shimmer 1.4s infinite",
       verticalAlign: "middle"
@@ -47,9 +47,14 @@ export function Dashboard({
   activeSellerName = "Todos los vendedores",
 }) {
   const totals = dashboard?.totals || {};
+  const sellers = dashboard?.sellers || [];
   const pendingBalances = (dashboard?.balances || []).filter(
     (balance) => !activeSellerId || balance.seller_id === activeSellerId,
   );
+
+  const totalNequi = sellers.reduce((sum, seller) => sum + Number(seller.total_nequi || 0), 0);
+  const totalCash = sellers.reduce((sum, seller) => sum + Number(seller.total_cash || 0), 0);
+  const totalProduction = sellers.reduce((sum, seller) => sum + Number(seller.total_sale_value || 0), 0);
 
   return (
     <>
@@ -80,17 +85,17 @@ export function Dashboard({
             <article>
               <CreditCard size={20} />
               <span>Nequi hoy</span>
-              <strong>{formatMoney(totals.nequi_today)}</strong>
+              <strong>{formatMoney(totalNequi)}</strong>
             </article>
             <article>
               <ClipboardList size={20} />
               <span>Efectivo hoy</span>
-              <strong>{formatMoney(totals.cash_today)}</strong>
+              <strong>{formatMoney(totalCash)}</strong>
             </article>
             <article>
               <Boxes size={20} />
               <span>Produccion hoy</span>
-              <strong>{formatMoney(totals.production_today)}</strong>
+              <strong>{formatMoney(totalProduction)}</strong>
             </article>
           </>
         )}

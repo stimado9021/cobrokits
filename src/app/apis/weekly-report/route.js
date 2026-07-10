@@ -24,15 +24,24 @@ export async function GET(request) {
           interval '1 day'
         )::date AS day
       ),
-      -- Payments per day, based on Registrar Visita records.
-      daily_visit_payments AS (
+      -- Payments per day (from canonical payments table).
+      daily_payments AS (
+        SELECT
+          p.paid_at::date AS day,
+          SUM(p.amount) FILTER (WHERE p.method = 'efectivo') AS m1_efectivo,
+          SUM(p.amount) FILTER (WHERE p.method = 'nequi')    AS m2_nequi,
+          SUM(p.amount)                                       AS abono_total,
+          COUNT(DISTINCT p.customer_id)                       AS clientes_abonaron
+        FROM cobrokits.payments p
+        WHERE p.paid_at::date BETWEEN $1::date AND ($1::date + interval '6 days')
+          AND ($2::uuid IS NULL OR p.seller_id = $2::uuid)
+        GROUP BY p.paid_at::date
+      ),
+      -- Total visits per day.
+      daily_visits AS (
         SELECT
           cv.visit_date::date AS day,
-          SUM(cv.payment_amount) FILTER (WHERE cv.payment_method = 'efectivo') AS m1_efectivo,
-          SUM(cv.payment_amount) FILTER (WHERE cv.payment_method = 'nequi')    AS m2_nequi,
-          SUM(cv.payment_amount)                                               AS abono_total,
-          COUNT(DISTINCT cv.customer_id) FILTER (WHERE cv.payment_amount > 0)  AS clientes_abonaron,
-          COUNT(cv.id)                                                         AS visitas_totales
+          COUNT(cv.id) AS visitas_totales
         FROM cobrokits.customer_visits cv
         WHERE cv.visit_date::date BETWEEN $1::date AND ($1::date + interval '6 days')
           AND ($2::uuid IS NULL OR cv.seller_id = $2::uuid)
@@ -42,13 +51,24 @@ export async function GET(request) {
       daily_visit_items AS (
         SELECT
           cv.visit_date::date AS day,
-          SUM(cvi.quantity)                                                         AS clientes_no_llevaron,
-          SUM(cvi.line_sale_total)                                                  AS suma_entrega,
-          SUM(cvi.line_investment_total)                                            AS inversion_dia
+          SUM(cvi.line_sale_total)        AS suma_entrega,
+          SUM(cvi.line_investment_total)  AS inversion_dia
         FROM cobrokits.customer_visits cv
         JOIN cobrokits.customer_visit_items cvi ON cvi.visit_id = cv.id
         WHERE cv.visit_date::date BETWEEN $1::date AND ($1::date + interval '6 days')
           AND ($2::uuid IS NULL OR cv.seller_id = $2::uuid)
+        GROUP BY cv.visit_date::date
+      ),
+      -- Customers whose balance reached 0 that day (cancelada).
+      daily_canceled AS (
+        SELECT
+          cv.visit_date::date AS day,
+          COUNT(DISTINCT cv.customer_id) AS canceladas
+        FROM cobrokits.customer_visits cv
+        WHERE cv.visit_date::date BETWEEN $1::date AND ($1::date + interval '6 days')
+          AND ($2::uuid IS NULL OR cv.seller_id = $2::uuid)
+          AND cv.new_balance = 0
+          AND cv.payment_amount > 0
         GROUP BY cv.visit_date::date
       ),
       -- Manual entries per day
@@ -71,15 +91,15 @@ export async function GET(request) {
       )
       SELECT
         wd.day::text                                              AS day,
-        COALESCE(dvp.m1_efectivo, 0)                             AS m1_efectivo,
-        COALESCE(dvp.m2_nequi, 0)                                AS m2_nequi,
-        COALESCE(dvp.abono_total, 0)                             AS abono_total,
-        COALESCE(dvp.clientes_abonaron, 0)::int                  AS clientes_abonaron,
-        COALESCE(dvp.visitas_totales, 0)::int                    AS visitas_totales,
-        COALESCE(dvi.clientes_no_llevaron, 0)::int               AS clientes_no_llevaron,
+        COALESCE(dp.m1_efectivo, 0)                              AS m1_efectivo,
+        COALESCE(dp.m2_nequi, 0)                                 AS m2_nequi,
+        COALESCE(dp.abono_total, 0)                              AS abono_total,
+        COALESCE(dp.clientes_abonaron, 0)::int                   AS clientes_abonaron,
+        COALESCE(dvs.visitas_totales, 0)::int                    AS visitas_totales,
+        COALESCE(dc.canceladas, 0)::int                          AS clientes_no_llevaron,
         CASE
           WHEN (SELECT total FROM active_customers) > 0
-          THEN ROUND((COALESCE(dvp.visitas_totales, 0) / (SELECT total FROM active_customers)) * 100)
+          THEN ROUND((COALESCE(dvs.visitas_totales, 0) / (SELECT total FROM active_customers)) * 100)
           ELSE 0
         END::int                                                  AS efectividad_pct,
         COALESCE(dvi.suma_entrega, 0)                            AS suma_entrega,
@@ -89,18 +109,20 @@ export async function GET(request) {
         COALESCE(dm.d2, 0)                                       AS d2,
         COALESCE(dm.cnt_notes, '')                               AS cnt_notes,
         -- Dinero a entregar = Abono - Gasto +/- D1 +/- D2
-        COALESCE(dvp.abono_total, 0)
+        COALESCE(dp.abono_total, 0)
           - COALESCE(dm.gasto, 0)
           + COALESCE(dm.d1, 0)
           + COALESCE(dm.d2, 0)                                   AS dinero_a_entregar,
         -- Ganancia = Entrega - Inversión + Abono - Gasto
         COALESCE(dvi.suma_entrega, 0)
           - COALESCE(dvi.inversion_dia, 0)
-          + COALESCE(dvp.abono_total, 0)
+          + COALESCE(dp.abono_total, 0)
           - COALESCE(dm.gasto, 0)                                AS ganancia
       FROM week_days wd
-      LEFT JOIN daily_visit_payments dvp ON dvp.day = wd.day
+      LEFT JOIN daily_payments dp ON dp.day = wd.day
+      LEFT JOIN daily_visits dvs ON dvs.day = wd.day
       LEFT JOIN daily_visit_items    dvi ON dvi.day = wd.day
+      LEFT JOIN daily_canceled       dc  ON dc.day = wd.day
       LEFT JOIN daily_manual         dm  ON dm.day = wd.day
       ORDER BY wd.day
       `,
