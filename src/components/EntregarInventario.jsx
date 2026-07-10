@@ -1,9 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { PackagePlus, RotateCcw, Calendar } from "lucide-react";
 
-function toLocalISODate(date) {
-  const offsetDate = new Date(date.getTime() - date.getTimezoneOffset() * 60000);
-  return offsetDate.toISOString().slice(0, 10);
+function hoyColombia() {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Bogota" }).format(new Date());
 }
 
 export function EntregarInventario({
@@ -27,7 +26,7 @@ export function EntregarInventario({
   const [loading, setLoading] = useState(false);
   const [closing, setClosing] = useState(false);
   const [closeResult, setCloseResult] = useState(null);
-  const todayDate = useMemo(() => toLocalISODate(new Date()), []);
+  const todayDate = useMemo(() => hoyColombia(), []);
   const [viewDate, setViewDate] = useState(todayDate);
   const [availableDates, setAvailableDates] = useState([]);
 

@@ -24,52 +24,52 @@ export async function GET(request) {
           interval '1 day'
         )::date AS day
       ),
-      -- Payments per day (from canonical payments table).
+      -- Payments per day (from canonical payments table) — local Colombia time.
       daily_payments AS (
         SELECT
-          p.paid_at::date AS day,
+          (p.paid_at AT TIME ZONE 'America/Bogota')::date AS day,
           SUM(p.amount) FILTER (WHERE p.method = 'efectivo') AS m1_efectivo,
           SUM(p.amount) FILTER (WHERE p.method = 'nequi')    AS m2_nequi,
           SUM(p.amount)                                       AS abono_total,
           COUNT(DISTINCT p.customer_id)                       AS clientes_abonaron
         FROM cobrokits.payments p
-        WHERE p.paid_at::date BETWEEN $1::date AND ($1::date + interval '6 days')
+        WHERE (p.paid_at AT TIME ZONE 'America/Bogota')::date BETWEEN $1::date AND ($1::date + interval '6 days')
           AND ($2::uuid IS NULL OR p.seller_id = $2::uuid)
-        GROUP BY p.paid_at::date
+        GROUP BY (p.paid_at AT TIME ZONE 'America/Bogota')::date
       ),
       -- Total visits per day.
       daily_visits AS (
         SELECT
-          cv.visit_date::date AS day,
+          (cv.visit_date AT TIME ZONE 'America/Bogota')::date AS day,
           COUNT(cv.id) AS visitas_totales
         FROM cobrokits.customer_visits cv
-        WHERE cv.visit_date::date BETWEEN $1::date AND ($1::date + interval '6 days')
+        WHERE (cv.visit_date AT TIME ZONE 'America/Bogota')::date BETWEEN $1::date AND ($1::date + interval '6 days')
           AND ($2::uuid IS NULL OR cv.seller_id = $2::uuid)
-        GROUP BY cv.visit_date::date
+        GROUP BY (cv.visit_date AT TIME ZONE 'America/Bogota')::date
       ),
       -- Products left with customers per day.
       daily_visit_items AS (
         SELECT
-          cv.visit_date::date AS day,
+          (cv.visit_date AT TIME ZONE 'America/Bogota')::date AS day,
           SUM(cvi.line_sale_total)        AS suma_entrega,
           SUM(cvi.line_investment_total)  AS inversion_dia
         FROM cobrokits.customer_visits cv
         JOIN cobrokits.customer_visit_items cvi ON cvi.visit_id = cv.id
-        WHERE cv.visit_date::date BETWEEN $1::date AND ($1::date + interval '6 days')
+        WHERE (cv.visit_date AT TIME ZONE 'America/Bogota')::date BETWEEN $1::date AND ($1::date + interval '6 days')
           AND ($2::uuid IS NULL OR cv.seller_id = $2::uuid)
-        GROUP BY cv.visit_date::date
+        GROUP BY (cv.visit_date AT TIME ZONE 'America/Bogota')::date
       ),
       -- Customers whose balance reached 0 that day (cancelada).
       daily_canceled AS (
         SELECT
-          cv.visit_date::date AS day,
+          (cv.visit_date AT TIME ZONE 'America/Bogota')::date AS day,
           COUNT(DISTINCT cv.customer_id) AS canceladas
         FROM cobrokits.customer_visits cv
-        WHERE cv.visit_date::date BETWEEN $1::date AND ($1::date + interval '6 days')
+        WHERE (cv.visit_date AT TIME ZONE 'America/Bogota')::date BETWEEN $1::date AND ($1::date + interval '6 days')
           AND ($2::uuid IS NULL OR cv.seller_id = $2::uuid)
           AND cv.new_balance = 0
           AND cv.payment_amount > 0
-        GROUP BY cv.visit_date::date
+        GROUP BY (cv.visit_date AT TIME ZONE 'America/Bogota')::date
       ),
       -- Manual entries per day
       daily_manual AS (

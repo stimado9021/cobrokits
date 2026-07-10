@@ -1,5 +1,9 @@
 import { fail, ok, query } from "@/lib/db";
 
+function hoyColombia() {
+  return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Bogota" }).format(new Date());
+}
+
 export const dynamic = "force-dynamic";
 
 export async function GET(request) {
@@ -38,10 +42,9 @@ export async function POST(request) {
       if (!seller_id || !product_id || !quantity) {
         return fail(new Error("seller_id, product_id y quantity requeridos"), 400);
       }
-      const effectiveDate = stock_date || new Date().toISOString().slice(0, 10);
       const [result] = await query(
         `SELECT * FROM cobrokits.deliver_daily_stock($1::uuid, $2::uuid, $3::integer, $4::date, $5::text)`,
-        [seller_id, product_id, Number(quantity), effectiveDate, notes || null]
+        [seller_id, product_id, Number(quantity), stock_date || hoyColombia(), notes || null]
       );
       return ok({ result }, { status: 201 });
     }
@@ -51,10 +54,9 @@ export async function POST(request) {
       if (!seller_id) {
         return fail(new Error("seller_id requerido"), 400);
       }
-      const effectiveDate = stock_date || new Date().toISOString().slice(0, 10);
       const results = await query(
         `SELECT * FROM cobrokits.close_seller_day($1::uuid, $2::date)`,
-        [seller_id, effectiveDate]
+        [seller_id, stock_date || hoyColombia()]
       );
       return ok({ closed: results });
     }

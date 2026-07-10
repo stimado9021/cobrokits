@@ -269,6 +269,10 @@ export default function Home() {
     }
   }
 
+  function hoyColombia() {
+    return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Bogota" }).format(new Date());
+  }
+
   async function deliverDailyStock(event) {
     event.preventDefault();
     if (isSubmitting) return;
@@ -284,6 +288,7 @@ export default function Home() {
     setIsSubmitting(true);
     try {
       const sellerId = form.get("seller_id");
+      const stock_date = hoyColombia();
       for (const item of deliveryItems) {
         await api("/apis/daily-stock", {
           method: "POST",
@@ -292,6 +297,7 @@ export default function Home() {
             seller_id: sellerId,
             product_id: item.product_id,
             quantity: Number(item.quantity),
+            stock_date,
           }),
         });
       }

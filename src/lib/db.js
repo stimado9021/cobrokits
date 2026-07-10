@@ -14,6 +14,10 @@ function getPool() {
       connectionString: process.env.DATABASE_URL,
       ssl: { rejectUnauthorized: false }
     });
+    pool.on('connect', client => {
+      client.query("SET search_path TO cobrokits, public").catch(err => console.error("Error setting search_path:", err));
+      client.query("SET timezone TO 'America/Bogota'").catch(err => console.error("Error setting timezone:", err));
+    });
   }
 
   return pool;
