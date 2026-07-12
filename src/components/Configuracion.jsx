@@ -9,14 +9,44 @@ export function Configuracion({ createSeller, createProduct, sellers, products, 
   return (
     <section style={{display: 'flex', flexDirection: 'column', gap: '14px', marginTop: '14px'}}>
       <div className="panel" style={{width: '100%'}}>
-        <form className="inlineForm" onSubmit={createSeller} style={{marginBottom: '1rem'}}>
-          <h2>Vendedor</h2>
-          <input name="name" placeholder="Nombre" required />
-          <input name="phone" placeholder="Telefono" />
-          <button className="iconButton" type="submit" title="Crear vendedor" disabled={isSubmitting}>
-            {isSubmitting ? <span className="spinner" /> : <UserPlus size={18} />}
-          </button>
-        </form>
+        <div style={{marginBottom: '1rem'}}>
+          <h2 style={{margin: '0 0 12px'}}>Vendedor</h2>
+          <form
+            onSubmit={createSeller}
+            style={{
+              display: 'grid',
+              gridTemplateColumns: '1fr 140px auto',
+              gap: '8px',
+              alignItems: 'end',
+            }}
+          >
+            <div style={{display: 'flex', flexDirection: 'column', gap: '4px'}}>
+              <label style={{fontSize: '0.75rem', color: 'var(--muted)', fontWeight: 500}}>Nombre</label>
+              <input name="name" placeholder="Nombre del vendedor" required style={{width: '100%'}} />
+            </div>
+            <div style={{display: 'flex', flexDirection: 'column', gap: '4px'}}>
+              <label style={{fontSize: '0.75rem', color: 'var(--muted)', fontWeight: 500}}>Teléfono</label>
+              <input name="phone" placeholder="Ej: 3001234567" />
+            </div>
+            <button
+              className="primary"
+              type="submit"
+              title="Crear vendedor"
+              disabled={isSubmitting}
+              style={{
+                height: '38px',
+                padding: '0 16px',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {isSubmitting ? <span className="spinner" /> : <UserPlus size={16} />}
+              {isSubmitting ? "Creando..." : "Crear"}
+            </button>
+          </form>
+        </div>
         <table className="dataTable skel-table">
           <thead>
             <tr>
@@ -56,15 +86,48 @@ export function Configuracion({ createSeller, createProduct, sellers, products, 
       </div>
 
       <div className="panel" style={{width: '100%'}}>
-        <form className="inlineForm" onSubmit={createProduct} style={{marginBottom: '1rem'}}>
-          <h2>Producto</h2>
-          <input name="name" placeholder="Nombre" required />
-          <input name="investment_cost" type="number" min="0" placeholder="Costo" required style={{width: '80px'}}/>
-          <input name="sale_price" type="number" min="0" placeholder="PVP" required style={{width: '80px'}}/>
-          <button className="iconButton" type="submit" title="Crear producto" disabled={isSubmitting}>
-            {isSubmitting ? <span className="spinner" /> : <PackagePlus size={18} />}
-          </button>
-        </form>
+        <div style={{marginBottom: '1rem'}}>
+          <h2 style={{margin: '0 0 12px'}}>Producto</h2>
+          <form
+            onSubmit={createProduct}
+            style={{
+              display: 'grid',
+              gridTemplateColumns: '1fr 100px 100px auto',
+              gap: '8px',
+              alignItems: 'end',
+            }}
+          >
+            <div style={{display: 'flex', flexDirection: 'column', gap: '4px'}}>
+              <label style={{fontSize: '0.75rem', color: 'var(--muted)', fontWeight: 500}}>Nombre</label>
+              <input name="name" placeholder="Ej: Salchichas" required style={{width: '100%'}} />
+            </div>
+            <div style={{display: 'flex', flexDirection: 'column', gap: '4px'}}>
+              <label style={{fontSize: '0.75rem', color: 'var(--muted)', fontWeight: 500}}>Costo unitario</label>
+              <input name="investment_cost" type="number" min="0" placeholder="$0" required />
+            </div>
+            <div style={{display: 'flex', flexDirection: 'column', gap: '4px'}}>
+              <label style={{fontSize: '0.75rem', color: 'var(--muted)', fontWeight: 500}}>PVP (precio venta)</label>
+              <input name="sale_price" type="number" min="0" placeholder="$0" required />
+            </div>
+            <button
+              className="primary"
+              type="submit"
+              title="Crear producto"
+              disabled={isSubmitting}
+              style={{
+                height: '38px',
+                padding: '0 16px',
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: '6px',
+                whiteSpace: 'nowrap',
+              }}
+            >
+              {isSubmitting ? <span className="spinner" /> : <PackagePlus size={16} />}
+              {isSubmitting ? "Creando..." : "Crear"}
+            </button>
+          </form>
+        </div>
         <table className="dataTable skel-table">
           <thead>
             <tr>

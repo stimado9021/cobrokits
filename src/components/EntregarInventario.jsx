@@ -181,14 +181,16 @@ export function EntregarInventario({
             onChange={(event) => setCurrentDeliveryProductId(event.target.value)}
           >
             <option value="">Producto</option>
-            {products.map((product) => {
-              const whQty = whMap[product.id] ?? 0;
-              return (
-                <option key={product.id} value={product.id}>
-                  {product.name} (bodega: {whQty} uds)
-                </option>
-              );
-            })}
+            {products
+              .filter((product) => (whMap[product.id] ?? 0) > 0)
+              .map((product) => {
+                const whQty = whMap[product.id];
+                return (
+                  <option key={product.id} value={product.id}>
+                    {product.name} (bodega: {whQty} uds)
+                  </option>
+                );
+              })}
           </select>
           <input
             value={currentDeliveryQuantity}

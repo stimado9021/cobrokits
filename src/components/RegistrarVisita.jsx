@@ -182,14 +182,16 @@ export function RegistrarVisita({
         <div className="row">
           <select value={currentProductId} onChange={e => setCurrentProductId(e.target.value)}>
             <option value="">Producto dejado</option>
-            {products.map((product) => {
-              const qty = stockMap[product.id] ?? 0;
-              return (
-                <option key={product.id} value={product.id}>
-                  {product.name} ({qty} uds{qty === 0 ? " · sin stock" : ""})
-                </option>
-              );
-            })}
+            {products
+              .filter((product) => (stockMap[product.id] ?? 0) > 0)
+              .map((product) => {
+                const qty = stockMap[product.id];
+                return (
+                  <option key={product.id} value={product.id}>
+                    {product.name} ({qty} uds)
+                  </option>
+                );
+              })}
           </select>
           <input value={currentQuantity} onChange={e => setCurrentQuantity(e.target.value)} type="number" min="0" placeholder="Cant." style={{width: "70px"}} />
           <button type="button" className="iconButton" onClick={addVisitItem} title="Agregar a la visita" disabled={isSubmitting}>
