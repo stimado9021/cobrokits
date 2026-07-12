@@ -30,7 +30,7 @@ function toISODate(date) {
 
 function formatDate(date) {
   return new Date(date + "T12:00:00").toLocaleDateString("es-CO", {
-    day: "2-digit", month: "2-digit",
+    day: "2-digit", month: "2-digit", year: "numeric",
   });
 }
 
@@ -62,18 +62,18 @@ function moneyColored(val, zeroClass = "empty") {
 
 /* ─── Row definitions (matches the physical ledger) ───── */
 const ROWS = [
-  { key: "suma_entrega",        label: "Suma Ventas",          type: "money",   editable: false, desc: "Ventas nuevas dejadas en crédito" },
+  { key: "suma_entrega",        label: "Ventas",               type: "money",   editable: false, desc: "Ventas nuevas dejadas en crédito" },
   { key: "clientes_abonaron",   label: "Clientes",             type: "number",  editable: false, desc: "Clientes únicos que compraron o abonaron hoy" },
-  { key: "clientes_no_llevaron",label: "CNL (Canceladas)",     type: "number",  editable: false, desc: "Clientes que pagaron todo y su saldo quedó en 0 ese día" },
-  { key: "visitas_totales",     label: "Unid/Vendidas",         type: "number",  editable: false, desc: "Total de unidades vendidas (suma de cantidades)" },
-  { key: "inversion_dia",       label: "Costo inicial",        type: "money",   editable: false, desc: "Costo de inversion de los productos entregados" },
-  { key: "costo_cliente",       label: "Costo Cliente",        type: "money",   editable: false, desc: "Valor de venta de productos vendidos (cantidad * PVP)" },
-  { key: "efectividad_pct",     label: "% Efectividad",        type: "percent", editable: false, desc: "Abonos del día / Meta de cobro del día * 100" },
-  { key: "m1_efectivo",         label: "m1 (Efectivo)",        type: "money",   editable: false, desc: "Recaudo en efectivo" },
-  { key: "m2_nequi",            label: "M2 (Nequi)",           type: "money",   editable: false, desc: "Recaudo por Nequi" },
+  { key: "clientes_no_llevaron",label: "CNL",                  type: "number",  editable: false, desc: "Clientes que pagaron todo y su saldo quedó en 0 ese día" },
+  { key: "visitas_totales",     label: "Unid.",                type: "number",  editable: false, desc: "Total de unidades vendidas (suma de cantidades)" },
+  { key: "inversion_dia",       label: "Costo",                type: "money",   editable: false, desc: "Costo de inversion de los productos entregados" },
+  { key: "costo_cliente",       label: "Costo Cli.",           type: "money",   editable: false, desc: "Valor de venta de productos vendidos (cantidad * PVP)" },
+  { key: "efectividad_pct",     label: "% Efect.",             type: "percent", editable: false, desc: "Abonos del día / Meta de cobro del día * 100" },
+  { key: "m1_efectivo",         label: "Efectivo",             type: "money",   editable: false, desc: "Recaudo en efectivo" },
+  { key: "m2_nequi",            label: "Nequi",                type: "money",   editable: false, desc: "Recaudo por Nequi" },
   { key: "gasto",               label: "Gasto",                type: "money",   editable: true,  desc: "Gasolina, almuerzo, viáticos…" },
-  { key: "dinero_a_entregar",   label: "$ (A entregar)",       type: "money",   editable: false, desc: "Abono – Gasto", highlight: "computed" },
-  { key: "cnt_notes",           label: "CNT (Novedades)",      type: "text",    editable: true,  desc: "Observaciones del día" },
+  { key: "dinero_a_entregar",   label: "A entregar",           type: "money",   editable: false, desc: "Abono – Gasto", highlight: "computed" },
+  { key: "cnt_notes",           label: "Novedades",            type: "text",    editable: true,  desc: "Observaciones del día" },
   { key: "ganancia",            label: "Ganancia",             type: "money",   editable: false, desc: "Entrega – Inversión + Abono – Gasto", highlight: "profit" },
 ];
 
@@ -256,17 +256,17 @@ export function ReportesSemanales({ activeSellerId = "", activeSellerName = "Tod
       // Columnas visibles en el PDF
       const pdfCols = [
         { key: "day", label: "FECHA", type: "label" },
-        { key: "suma_entrega", label: "SUMA VENTAS", type: "money" },
+        { key: "suma_entrega", label: "VENTAS", type: "money" },
         { key: "clientes_abonaron", label: "CLIENTES", type: "number" },
         { key: "clientes_no_llevaron", label: "CNL", type: "number" },
-        { key: "visitas_totales", label: "UNID/VENDIDAS", type: "number" },
-        { key: "inversion_dia", label: "COSTO INICIAL", type: "money" },
-        { key: "costo_cliente", label: "COSTO CLIENTE", type: "money" },
-        { key: "efectividad_pct", label: "% EFECTIVIDAD", type: "percent" },
-        { key: "m1_efectivo", label: "M1 (EFECTIVO)", type: "money" },
-        { key: "m2_nequi", label: "M2 (NEQUI)", type: "money" },
+        { key: "visitas_totales", label: "UNID.", type: "number" },
+        { key: "inversion_dia", label: "COSTO", type: "money" },
+        { key: "costo_cliente", label: "COSTO CLI.", type: "money" },
+        { key: "efectividad_pct", label: "% EFECT.", type: "percent" },
+        { key: "m1_efectivo", label: "EFECTIVO", type: "money" },
+        { key: "m2_nequi", label: "NEQUI", type: "money" },
         { key: "gasto", label: "GASTO", type: "money" },
-        { key: "dinero_a_entregar", label: "$ (A ENTREGAR)", type: "money" },
+        { key: "dinero_a_entregar", label: "A ENTREGAR", type: "money" },
         { key: "ganancia", label: "GANANCIA", type: "money" },
       ];
 
