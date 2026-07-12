@@ -156,7 +156,7 @@ export default function Home() {
       // Auto-close any open daily stock from previous days
       try { await api("/apis/daily-stock", { method: "POST", body: JSON.stringify({ action: "auto_close" }) }); } catch { /* ignore */ }
 
-      const [dashboardData, sellersData, productsData, customersData, inventoryData, visitsData] = await Promise.all([
+      const results = await Promise.allSettled([
         api("/apis/dashboard"),
         api("/apis/sellers"),
         api("/apis/products"),
@@ -164,19 +164,28 @@ export default function Home() {
         api("/apis/inventory"),
         api("/apis/visits"),
       ]);
-      setDashboard(dashboardData);
-      setSellers(sellersData.sellers);
-      setProducts(productsData.products);
-      setCustomers(customersData.customers);
-      setInventory(inventoryData.inventory);
-      setVisits(visitsData.visits);
+
+      const [dashboardData, sellersData, productsData, customersData, inventoryData, visitsData] = results.map(r => r.status === "fulfilled" ? r.value : null);
+
+      if (dashboardData) setDashboard(dashboardData);
+      if (sellersData?.sellers) setSellers(sellersData.sellers);
+      if (productsData?.products) setProducts(productsData.products);
+      if (customersData?.customers) setCustomers(customersData.customers);
+      if (inventoryData?.inventory) setInventory(inventoryData.inventory);
+      if (visitsData?.visits) setVisits(visitsData.visits);
+
+      const sellersList = sellersData?.sellers || [];
+      const visitsList = visitsData?.visits || [];
       setActiveSellerId((current) => {
         if (current) return current;
-        const firstWithVisits = sellersData.sellers.find((s) =>
-          visitsData.visits?.some((v) => v.seller_id === s.id)
+        const firstWithVisits = sellersList.find((s) =>
+          visitsList.some((v) => v.seller_id === s.id)
         );
-        return firstWithVisits?.id || sellersData.sellers[0]?.id || "";
+        return firstWithVisits?.id || sellersList[0]?.id || "";
       });
+
+      const errors = results.filter(r => r.status === "rejected").map(r => r.reason?.message);
+      if (errors.length > 0) setNotice(errors[0]);
     } catch (error) {
       setNotice(error.message);
     } finally {
