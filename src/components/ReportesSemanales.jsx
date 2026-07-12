@@ -67,7 +67,7 @@ const ROWS = [
   { key: "clientes_no_llevaron",label: "CNL (Canceladas)",     type: "number",  editable: false, desc: "Clientes que pagaron todo y su saldo quedó en 0 ese día" },
   { key: "visitas_totales",     label: "Unid/Vendidas",         type: "number",  editable: false, desc: "Total de unidades vendidas (suma de cantidades)" },
   { key: "inversion_dia",       label: "Costo inicial",        type: "money",   editable: false, desc: "Costo de inversion de los productos entregados" },
-  { key: "efectividad_pct",     label: "% Efectividad",        type: "percent", editable: false, desc: "Visitas / clientes activos totales" },
+  { key: "efectividad_pct",     label: "% Efectividad",        type: "percent", editable: false, desc: "Abonos del día / Meta de cobro del día * 100" },
   { key: "m1_efectivo",         label: "m1 (Efectivo)",        type: "money",   editable: false, desc: "Recaudo en efectivo" },
   { key: "m2_nequi",            label: "M2 (Nequi)",           type: "money",   editable: false, desc: "Recaudo por Nequi" },
   { key: "gasto",               label: "Gasto",                type: "money",   editable: true,  desc: "Gasolina, almuerzo, viáticos…" },

@@ -89,6 +89,17 @@ export async function GET(request) {
         FROM cobrokits.customers
         WHERE is_active = true
           AND ($2::uuid IS NULL OR seller_id = $2::uuid)
+      ),
+      -- Collection target per day: sum of balances for customers whose visit_day matches the day of week
+      daily_target AS (
+        SELECT
+          wd.day,
+          EXTRACT(DOW FROM wd.day)::int AS dow,
+          COALESCE(SUM(c.current_balance), 0) AS target_amount
+        FROM week_days wd
+        JOIN cobrokits.customers c ON c.is_active = true AND c.visit_day = EXTRACT(DOW FROM wd.day)::int
+        WHERE ($2::uuid IS NULL OR c.seller_id = $2::uuid)
+        GROUP BY wd.day, EXTRACT(DOW FROM wd.day)
       )
       SELECT
         wd.day::text                                              AS day,
@@ -99,8 +110,8 @@ export async function GET(request) {
         COALESCE(dvi.total_units, 0)::int                         AS visitas_totales,
         COALESCE(dc.canceladas, 0)::int                          AS clientes_no_llevaron,
         CASE
-          WHEN (SELECT total FROM active_customers) > 0
-          THEN ROUND((COALESCE(dvs.visitas_totales, 0) / (SELECT total FROM active_customers)) * 100)
+          WHEN COALESCE(dt.target_amount, 0) > 0
+          THEN ROUND((COALESCE(dp.abono_total, 0) / dt.target_amount) * 100)
           ELSE 0
         END::int                                                  AS efectividad_pct,
         COALESCE(dvi.suma_entrega, 0)                            AS suma_entrega,
@@ -125,6 +136,7 @@ export async function GET(request) {
       LEFT JOIN daily_visit_items    dvi ON dvi.day = wd.day
       LEFT JOIN daily_canceled       dc  ON dc.day = wd.day
       LEFT JOIN daily_manual         dm  ON dm.day = wd.day
+      LEFT JOIN daily_target         dt  ON dt.day = wd.day
       ORDER BY wd.day
       `,
       [weekStart, sellerId]
