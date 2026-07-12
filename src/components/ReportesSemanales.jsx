@@ -71,14 +71,12 @@ const ROWS = [
   { key: "m1_efectivo",         label: "m1 (Efectivo)",        type: "money",   editable: false, desc: "Recaudo en efectivo" },
   { key: "m2_nequi",            label: "M2 (Nequi)",           type: "money",   editable: false, desc: "Recaudo por Nequi" },
   { key: "gasto",               label: "Gasto",                type: "money",   editable: true,  desc: "Gasolina, almuerzo, viáticos…" },
-  { key: "d1",                  label: "D1",                   type: "money_signed", editable: true, desc: "Diferencia / ajuste de caja" },
-  { key: "d2",                  label: "D2",                   type: "money_signed", editable: true, desc: "Diferencia / ajuste de inventario" },
-  { key: "dinero_a_entregar",   label: "$ (A entregar)",       type: "money",   editable: false, desc: "Abono – Gasto ± D1 ± D2", highlight: "computed" },
+  { key: "dinero_a_entregar",   label: "$ (A entregar)",       type: "money",   editable: false, desc: "Abono – Gasto", highlight: "computed" },
   { key: "cnt_notes",           label: "CNT (Novedades)",      type: "text",    editable: true,  desc: "Observaciones del día" },
   { key: "ganancia",            label: "Ganancia",             type: "money",   editable: false, desc: "Entrega – Inversión + Abono – Gasto", highlight: "profit" },
 ];
 
-const MANUAL_KEYS = ["gasto", "d1", "d2", "cnt_notes"];
+const MANUAL_KEYS = ["gasto", "cnt_notes"];
 
 /* ─── Empty day ───────────────────────────────────────── */
 function emptyDay(dateStr) {
@@ -87,7 +85,7 @@ function emptyDay(dateStr) {
     m1_efectivo: 0, m2_nequi: 0, abono_total: 0,
     clientes_abonaron: 0, visitas_totales: 0, clientes_no_llevaron: 0,
     efectividad_pct: 0, suma_entrega: 0, inversion_dia: 0,
-    gasto: 0, d1: 0, d2: 0, cnt_notes: "",
+    gasto: 0, cnt_notes: "",
     dinero_a_entregar: 0, ganancia: 0,
   };
 }
@@ -149,8 +147,6 @@ export function ReportesSemanales({ activeSellerId = "", activeSellerName = "Tod
       const payload = {
         date: dayData.day,
         gasto: key === "gasto" ? n(value) : n(dayData.gasto),
-        d1: key === "d1" ? n(value) : n(dayData.d1),
-        d2: key === "d2" ? n(value) : n(dayData.d2),
         cnt_notes: key === "cnt_notes" ? value : (dayData.cnt_notes || ""),
       };
       const res = await fetch("/apis/weekly-report", {
@@ -256,7 +252,7 @@ export function ReportesSemanales({ activeSellerId = "", activeSellerName = "Tod
       const weekEnd = addDays(weekStart, 6);
       const weekLabel = `${formatDate(toISODate(weekStart))} – ${formatDate(toISODate(weekEnd))} · ${weekEnd.getFullYear()}`;
 
-      // Columnas visibles en el PDF (sin D1, D2, CNT)
+      // Columnas visibles en el PDF
       const pdfCols = [
         { key: "day", label: "FECHA", type: "label" },
         { key: "suma_entrega", label: "SUMA VENTAS", type: "money" },

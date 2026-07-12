@@ -77,8 +77,6 @@ export async function GET(request) {
         SELECT
           entry_date AS day,
           gasto,
-          d1,
-          d2,
           cnt_notes
         FROM cobrokits.weekly_manual_entries
         WHERE entry_date BETWEEN $1::date AND ($1::date + interval '6 days')
@@ -117,14 +115,10 @@ export async function GET(request) {
         COALESCE(dvi.suma_entrega, 0)                            AS suma_entrega,
         COALESCE(dvi.inversion_dia, 0)                           AS inversion_dia,
         COALESCE(dm.gasto, 0)                                    AS gasto,
-        COALESCE(dm.d1, 0)                                       AS d1,
-        COALESCE(dm.d2, 0)                                       AS d2,
         COALESCE(dm.cnt_notes, '')                               AS cnt_notes,
-        -- Dinero a entregar = Abono - Gasto +/- D1 +/- D2
+        -- Dinero a entregar = Abono - Gasto
         COALESCE(dp.abono_total, 0)
-          - COALESCE(dm.gasto, 0)
-          + COALESCE(dm.d1, 0)
-          + COALESCE(dm.d2, 0)                                   AS dinero_a_entregar,
+          - COALESCE(dm.gasto, 0)                                AS dinero_a_entregar,
         -- Ganancia = Entrega - Inversión + Abono - Gasto
         COALESCE(dvi.suma_entrega, 0)
           - COALESCE(dvi.inversion_dia, 0)
@@ -162,29 +156,27 @@ export async function GET(request) {
 /**
  * PUT /apis/weekly-report
  * Upserts manual fields for a single day.
- * Body: { date: "YYYY-MM-DD", gasto, d1, d2, cnt_notes }
+ * Body: { date: "YYYY-MM-DD", gasto, cnt_notes }
  */
 export async function PUT(request) {
   try {
     const body = await request.json();
-    const { date, gasto = 0, d1 = 0, d2 = 0, cnt_notes = "" } = body;
+    const { date, gasto = 0, cnt_notes = "" } = body;
 
     if (!date) return fail(new Error("date requerido"), 400);
 
     const [entry] = await query(
       `
-      INSERT INTO cobrokits.weekly_manual_entries (entry_date, gasto, d1, d2, cnt_notes)
-      VALUES ($1::date, $2, $3, $4, $5)
+      INSERT INTO cobrokits.weekly_manual_entries (entry_date, gasto, cnt_notes)
+      VALUES ($1::date, $2, $3)
       ON CONFLICT (entry_date)
       DO UPDATE SET
         gasto      = EXCLUDED.gasto,
-        d1         = EXCLUDED.d1,
-        d2         = EXCLUDED.d2,
         cnt_notes  = EXCLUDED.cnt_notes,
         updated_at = now()
-      RETURNING entry_date::text AS day, gasto, d1, d2, cnt_notes
+      RETURNING entry_date::text AS day, gasto, cnt_notes
       `,
-      [date, gasto, d1, d2, cnt_notes]
+      [date, gasto, cnt_notes]
     );
 
     return ok({ entry });
