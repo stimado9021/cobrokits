@@ -184,6 +184,63 @@ button {
   color: var(--brand-light);
 }
 
+/* Sidebar collapse toggle */
+.sidebar-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 24px;
+}
+
+.sidebar-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--line);
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  transition: background 0.18s, color 0.18s;
+  flex-shrink: 0;
+}
+
+.sidebar-toggle:hover {
+  background: var(--surface-2);
+  color: var(--text);
+}
+
+/* Collapsed sidebar */
+.sidebar-collapsed .sidebar {
+  width: 64px;
+  padding: 16px 8px;
+}
+
+.sidebar-collapsed .brand {
+  justify-content: center;
+  margin-bottom: 16px;
+}
+
+.sidebar-collapsed .navButton {
+  justify-content: center;
+  padding: 10px;
+}
+
+.sidebar-collapsed .navButton svg {
+  margin: 0;
+}
+
+.sidebar-collapsed .sideStats,
+.sidebar-collapsed .field {
+  display: none;
+}
+
+.shell.sidebar-collapsed {
+  grid-template-columns: 64px minmax(0, 1fr);
+}
+
 /* Field inside sidebar */
 .field {
   display: grid;

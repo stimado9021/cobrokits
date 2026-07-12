@@ -8,7 +8,7 @@ import {
   CreditCard,
   PackagePlus,
   RefreshCcw,
-  Save,
+ Save,
   UserPlus,
   Home as HomeIcon,
   MapPin,
@@ -16,7 +16,9 @@ import {
   Settings,
   Archive,
   Truck,
-  BarChart2
+  BarChart2,
+  PanelLeftClose,
+  PanelLeftOpen
 } from "lucide-react";
 
 import { Dashboard } from "../components/Dashboard";
@@ -66,6 +68,7 @@ export default function Home() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   
   const [activeTab, setActiveTab] = useState("dashboard");
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [visitFormKey, setVisitFormKey] = useState(0);
   const [entregarFormKey, setEntregarFormKey] = useState(0);
 
@@ -378,70 +381,85 @@ export default function Home() {
   const totals = dashboard?.totals || {};
 
   return (
-    <main className="shell">
+    <main className={`shell ${sidebarCollapsed ? "sidebar-collapsed" : ""}`}>
       <aside className="sidebar">
-        <div className="brand">
-          <div className="brandMark">CK</div>
-          <div>
-            <strong>CobroKits</strong>
-            <span>Consignacion semanal</span>
+        <div className="sidebar-top">
+          <div className="brand">
+            <div className="brandMark">CK</div>
+            {!sidebarCollapsed && (
+              <div>
+                <strong>CobroKits</strong>
+                <span>Consignacion semanal</span>
+              </div>
+            )}
           </div>
+          <button
+            className="sidebar-toggle"
+            onClick={() => setSidebarCollapsed((v) => !v)}
+            title={sidebarCollapsed ? "Expandir menú" : "Colapsar menú"}
+          >
+            {sidebarCollapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
+          </button>
         </div>
 
         <nav className="navMenu">
-          <button className={`navButton ${activeTab === 'dashboard' ? 'active' : ''}`} onClick={() => setActiveTab('dashboard')}>
+          <button className={`navButton ${activeTab === 'dashboard' ? 'active' : ''}`} onClick={() => setActiveTab('dashboard')} title="Inicio">
             <HomeIcon size={18} />
-            <span>Inicio</span>
+            {!sidebarCollapsed && <span>Inicio</span>}
           </button>
-          <button className={`navButton ${activeTab === 'registrar-visita' ? 'active' : ''}`} onClick={() => setActiveTab('registrar-visita')}>
+          <button className={`navButton ${activeTab === 'registrar-visita' ? 'active' : ''}`} onClick={() => setActiveTab('registrar-visita')} title="Registrar Visita">
             <MapPin size={18} />
-            <span>Registrar Visita</span>
+            {!sidebarCollapsed && <span>Registrar Visita</span>}
           </button>
-          <button className={`navButton ${activeTab === 'entregar-inventario' ? 'active' : ''}`} onClick={() => setActiveTab('entregar-inventario')}>
+          <button className={`navButton ${activeTab === 'entregar-inventario' ? 'active' : ''}`} onClick={() => setActiveTab('entregar-inventario')} title="Entregar Inventario">
             <Truck size={18} />
-            <span>Entregar Inventario</span>
+            {!sidebarCollapsed && <span>Entregar Inventario</span>}
           </button>
-          <button className={`navButton ${activeTab === 'clientes' ? 'active' : ''}`} onClick={() => setActiveTab('clientes')}>
+          <button className={`navButton ${activeTab === 'clientes' ? 'active' : ''}`} onClick={() => setActiveTab('clientes')} title="Clientes">
             <Users size={18} />
-            <span>Clientes</span>
+            {!sidebarCollapsed && <span>Clientes</span>}
           </button>
-          <button className={`navButton ${activeTab === 'inventario' ? 'active' : ''}`} onClick={() => setActiveTab('inventario')}>
+          <button className={`navButton ${activeTab === 'inventario' ? 'active' : ''}`} onClick={() => setActiveTab('inventario')} title="Inventario General">
             <Archive size={18} />
-            <span>Inventario General</span>
+            {!sidebarCollapsed && <span>Inventario General</span>}
           </button>
-          <button className={`navButton ${activeTab === 'reportes' ? 'active' : ''}`} onClick={() => setActiveTab('reportes')}>
+          <button className={`navButton ${activeTab === 'reportes' ? 'active' : ''}`} onClick={() => setActiveTab('reportes')} title="Reportes Semanales">
             <BarChart2 size={18} />
-            <span>Reportes Semanales</span>
+            {!sidebarCollapsed && <span>Reportes Semanales</span>}
           </button>
-          <button className={`navButton ${activeTab === 'configuracion' ? 'active' : ''}`} onClick={() => setActiveTab('configuracion')}>
+          <button className={`navButton ${activeTab === 'configuracion' ? 'active' : ''}`} onClick={() => setActiveTab('configuracion')} title="Configuración">
             <Settings size={18} />
-            <span>Configuración</span>
+            {!sidebarCollapsed && <span>Configuración</span>}
           </button>
         </nav>
 
         <div style={{flex: 1}}></div>
 
-        <label className="field">
-          <span>Vendedor activo</span>
-          <select
-            value={activeSellerId}
-            onChange={(event) => setActiveSellerId(event.target.value)}
-          >
-            <option value="">Todos</option>
-            {sellers.map((seller) => (
-              <option key={seller.id} value={seller.id}>
-                {seller.name}
-              </option>
-            ))}
-          </select>
-        </label>
+        {!sidebarCollapsed && (
+          <>
+            <label className="field">
+              <span>Vendedor activo</span>
+              <select
+                value={activeSellerId}
+                onChange={(event) => setActiveSellerId(event.target.value)}
+              >
+                <option value="">Todos</option>
+                {sellers.map((seller) => (
+                  <option key={seller.id} value={seller.id}>
+                    {seller.name}
+                  </option>
+                ))}
+              </select>
+            </label>
 
-        <div className="sideStats">
-          <span>Cartera</span>
-          <strong>{formatMoney(totals.total_portfolio)}</strong>
-          <span>Recaudo hoy</span>
-          <strong>{formatMoney(totals.collected_today)}</strong>
-        </div>
+            <div className="sideStats">
+              <span>Cartera</span>
+              <strong>{formatMoney(totals.total_portfolio)}</strong>
+              <span>Recaudo hoy</span>
+              <strong>{formatMoney(totals.collected_today)}</strong>
+            </div>
+          </>
+        )}
       </aside>
 
       <section className="content">
