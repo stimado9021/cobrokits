@@ -99,7 +99,7 @@ export function EntregarInventario({
   const isPastDay = viewDate < todayDate;
   const isToday = viewDate === todayDate;
 
-  const dailyRows = useMemo(() => {
+    const dailyRows = useMemo(() => {
     const rowsByProduct = new Map();
 
     dailyItems.forEach((item) => {
@@ -112,12 +112,22 @@ export function EntregarInventario({
         sold,
         remaining: delivered - sold,
         sale_price: Number(item.sale_price),
+        investment_cost: Number(item.investment_cost),
         is_closed: item.is_closed,
       });
     });
 
-    return Array.from(rowsByProduct.values()).sort((a, b) => a.product_name.localeCompare(b.product_name));
-  }, [dailyItems]);
+    let rows = Array.from(rowsByProduct.values()).sort((a, b) => a.product_name.localeCompare(b.product_name));
+    // Ocultar items cerrados en vista "Hoy"
+    if (isToday) {
+      rows = rows.filter(r => !r.is_closed);
+    }
+    return rows;
+  }, [dailyItems, isToday]);
+
+  const inversionVendido = useMemo(() => {
+    return dailyRows.reduce((sum, r) => sum + (r.sold * r.investment_cost), 0);
+  }, [dailyRows]);
 
   async function handleCloseDay() {
     if (!selectedSellerId || closing) return;
@@ -259,7 +269,26 @@ export function EntregarInventario({
           )}
 
           {loading ? (
-            <p>Cargando...</p>
+            <table className="dataTable skel-table">
+              <thead>
+                <tr>
+                  <th>Producto</th>
+                  <th>Entregado</th>
+                  <th>Vendido</th>
+                  <th>Disponible</th>
+                </tr>
+              </thead>
+              <tbody>
+                {[1,2,3].map(n => (
+                  <tr key={`skel-${n}`}>
+                    <td><div className="skel skel-line" style={{width:'70%'}} /></td>
+                    <td><div className="skel skel-line" style={{width:'40px'}} /></td>
+                    <td><div className="skel skel-line" style={{width:'40px'}} /></td>
+                    <td><div className="skel skel-line" style={{width:'40px'}} /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           ) : dailyRows.length > 0 ? (
             <table className="dataTable">
               <thead>
@@ -274,7 +303,7 @@ export function EntregarInventario({
               <tbody>
                 {dailyRows.map((item) => (
                   <tr key={item.product_id} style={{ opacity: item.is_closed ? 0.6 : 1 }}>
-                    <td>{item.product_name} {item.is_closed && <span style={{fontSize:'10px', color:'var(--brand)', marginLeft:'4px'}}>(Cerrado)</span>}</td>
+                    <td>{item.product_name} <span style={{fontSize:'11px', color:'var(--text-dim)'}}>{item.investment_cost}/{item.sale_price}</span>{item.is_closed && <span style={{fontSize:'10px', color:'var(--brand)', marginLeft:'4px'}}>(Cerrado)</span>}</td>
                     <td>{item.delivered}</td>
                     <td>{item.sold}</td>
                     <td>{item.is_closed ? 0 : item.remaining}</td>
@@ -282,6 +311,16 @@ export function EntregarInventario({
                   </tr>
                 ))}
               </tbody>
+              {dailyRows.length > 0 && (
+                <tfoot>
+                  <tr>
+                    <td><strong>Total inversion vendido</strong></td>
+                    <td></td>
+                    <td style={{ fontWeight: "bold", color: "var(--red)" }}>{formatMoney(inversionVendido)}</td>
+                    <td colSpan={isPastDay || dailyRows.some(r => r.is_closed) ? 2 : 1}></td>
+                  </tr>
+                </tfoot>
+              )}
             </table>
           ) : (
             <p>No hay registros de stock para esta fecha.</p>

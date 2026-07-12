@@ -52,7 +52,8 @@ export async function GET(request) {
         SELECT
           (cv.visit_date AT TIME ZONE 'America/Bogota')::date AS day,
           SUM(cvi.line_sale_total)        AS suma_entrega,
-          SUM(cvi.line_investment_total)  AS inversion_dia
+          SUM(cvi.line_investment_total)  AS inversion_dia,
+          SUM(cvi.quantity)::int          AS total_units
         FROM cobrokits.customer_visits cv
         JOIN cobrokits.customer_visit_items cvi ON cvi.visit_id = cv.id
         WHERE (cv.visit_date AT TIME ZONE 'America/Bogota')::date BETWEEN $1::date AND ($1::date + interval '6 days')
@@ -95,7 +96,7 @@ export async function GET(request) {
         COALESCE(dp.m2_nequi, 0)                                 AS m2_nequi,
         COALESCE(dp.abono_total, 0)                              AS abono_total,
         COALESCE(dp.clientes_abonaron, 0)::int                   AS clientes_abonaron,
-        COALESCE(dvs.visitas_totales, 0)::int                    AS visitas_totales,
+        COALESCE(dvi.total_units, 0)::int                         AS visitas_totales,
         COALESCE(dc.canceladas, 0)::int                          AS clientes_no_llevaron,
         CASE
           WHEN (SELECT total FROM active_customers) > 0

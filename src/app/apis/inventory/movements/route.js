@@ -65,7 +65,7 @@ export async function GET(request) {
         FROM cobrokits.inventory_movements im
         JOIN cobrokits.sellers  s ON s.id = im.seller_id
         JOIN cobrokits.products p ON p.id = im.product_id
-        WHERE im.movement_type = 'entrega_a_vendedor'
+        WHERE im.movement_type IN ('entrega_a_vendedor', 'entrega_diaria_vendedor')
           ${where}
         ORDER BY im.created_at DESC
         LIMIT 200

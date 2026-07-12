@@ -1,6 +1,12 @@
 import { useState, useEffect, useMemo, useRef } from "react";
 import { ClipboardList, PackagePlus, Save } from "lucide-react";
 
+// Helper to convert day number to name
+function dayName(dayNum) {
+  const days = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
+  return days[dayNum] ?? "—";
+}
+
 export function RegistrarVisita({ 
   registerVisit, 
   sellers, 
@@ -17,10 +23,14 @@ export function RegistrarVisita({
   visitItems, 
   removeVisitItem,
   isSubmitting,
+  loading = false,
   visits = [],
   activeSellerName = "Todos los vendedores",
+  selectedVisitCustomer,
+  setSelectedVisitCustomer,
 }) {
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Bogota" }).format(new Date());
+  const todayDow = new Date().getDay(); // 0=Domingo, 6=Sábado (zona horaria local, usaremos Colombia)
   const [selectedDate, setSelectedDate] = useState(today);
 
   const sellerVisits = useMemo(
@@ -41,9 +51,16 @@ export function RegistrarVisita({
 
   useEffect(() => {
     if (selectedDate && !availableDates.includes(selectedDate)) {
-      setSelectedDate(availableDates[0] || today);
+      if (selectedDate !== today) {
+        setSelectedDate(today);
+      }
     }
   }, [availableDates, selectedDate, today]);
+
+  // Reset selected customer when seller changes
+  useEffect(() => {
+    setSelectedVisitCustomer("");
+  }, [activeSellerId]);
 
   const filteredVisits = useMemo(
     () => sellerVisits.filter((v) => {
@@ -137,13 +154,25 @@ export function RegistrarVisita({
             </option>
           ))}
         </select>
-        <select name="customer_id" required>
+        <select name="customer_id" id="visit-customer-select" required value={selectedVisitCustomer} onChange={e => setSelectedVisitCustomer(e.target.value)}>
           <option value="">Cliente</option>
-          {activeCustomers.map((customer) => (
-            <option key={customer.id} value={customer.id}>
-              {customer.name} - {formatMoney(customer.current_balance)}
-            </option>
-          ))}
+          {activeCustomers.map((customer) => {
+            const visitDay = customer.visit_day !== null && customer.visit_day !== undefined ? Number(customer.visit_day) : null;
+            const isToday = visitDay !== null && visitDay === todayDow;
+            const label = visitDay !== null 
+              ? `${customer.name} (Visita: ${dayName(visitDay)}) - ${formatMoney(customer.current_balance)}`
+              : `${customer.name} - ${formatMoney(customer.current_balance)}`;
+            return (
+              <option 
+                key={customer.id} 
+                value={customer.id} 
+                disabled={!isToday}
+                style={{ opacity: isToday ? 1 : 0.5, color: isToday ? 'var(--text)' : 'var(--text-dim)' }}
+              >
+                {label} {isToday ? "✓" : " (solo " + dayName(visitDay) + ")"}
+              </option>
+            );
+          })}
         </select>
         {!hasAnyStock && activeSellerId && (
           <div className="notice" style={{ border: "1px solid rgba(239,68,68,0.3)", background: "rgba(239,68,68,0.1)", color: "var(--red)", margin: "0" }}>
@@ -239,7 +268,17 @@ export function RegistrarVisita({
               </tr>
             </thead>
             <tbody>
-              {filteredVisits.length === 0 ? (
+              {loading ? (
+                [1,2,3,4].map(n => (
+                  <tr key={`skel-${n}`}>
+                    <td><div className="skel skel-line" style={{width:'70%'}} /><div className="skel skel-line-sm" style={{width:'45%', marginTop:'4px'}} /></td>
+                    <td><div className="skel skel-line" style={{width:'60px'}} /></td>
+                    <td><div className="skel skel-line" style={{width:'60px'}} /></td>
+                    <td><div className="skel skel-line" style={{width:'60px'}} /></td>
+                    <td><div className="skel skel-line" style={{width:'60px'}} /></td>
+                  </tr>
+                ))
+              ) : filteredVisits.length === 0 ? (
                 <tr>
                   <td colSpan="5" className="empty-cell">Sin visitas en esta fecha</td>
                 </tr>

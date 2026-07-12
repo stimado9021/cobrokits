@@ -48,13 +48,33 @@ export function Dashboard({
 }) {
   const totals = dashboard?.totals || {};
   const sellers = dashboard?.sellers || [];
-  const pendingBalances = (dashboard?.balances || []).filter(
+  
+  // Get today's day of week from server (America/Bogota), fallback to local browser time
+  const todayDow = dashboard?.today_dow ?? new Date().getDay();
+  
+  // Filtrar clientes que tienen visita programada para HOY (visit_day = today's day of week)
+  const todayBalances = (dashboard?.balances || []).filter(
+    (balance) => balance.visit_day === todayDow
+  );
+  const filteredBalances = todayBalances.filter(
     (balance) => !activeSellerId || balance.seller_id === activeSellerId,
   );
+  
+  // Meta del vendedor activo (o global si no hay filtro)
+  const sellerTargetToday = filteredBalances.reduce((sum, b) => sum + Number(b.current_balance || 0), 0);
+  // Total cobrado hoy (global)
+  const totalCollectedToday = Number(totals.collected_today || 0);
 
   const totalNequi = sellers.reduce((sum, seller) => sum + Number(seller.total_nequi || 0), 0);
   const totalCash = sellers.reduce((sum, seller) => sum + Number(seller.total_cash || 0), 0);
-  const totalProduction = sellers.reduce((sum, seller) => sum + Number(seller.total_sale_value || 0), 0);
+  const totalProduction = sellers.reduce((sum, seller) => sum + Number(seller.total_collected || 0), 0);
+  
+  // Collection target for active seller (or all)
+  const collectionTarget = dashboard?.collectionTarget?.target_amount 
+    ? Number(dashboard.collectionTarget.target_amount) 
+    : (activeSellerId 
+        ? (sellers.find(s => s.seller_id === activeSellerId)?.collection_target || 0)
+        : sellers.reduce((sum, s) => sum + Number(s.collection_target || 0), 0));
 
   return (
     <>
@@ -68,37 +88,37 @@ export function Dashboard({
 
       {/* ── Metric cards ─────────────────────────── */}
       <section className="metrics">
-        {loading ? (
-          <>
-            <MetricSkeleton />
-            <MetricSkeleton />
-            <MetricSkeleton />
-            <MetricSkeleton />
-          </>
-        ) : (
-          <>
-            <article>
-              <Banknote size={20} />
-              <span>Cartera total</span>
-              <strong>{formatMoney(totals.total_portfolio)}</strong>
-            </article>
-            <article>
-              <CreditCard size={20} />
-              <span>Nequi hoy</span>
-              <strong>{formatMoney(totalNequi)}</strong>
-            </article>
-            <article>
-              <ClipboardList size={20} />
-              <span>Efectivo hoy</span>
-              <strong>{formatMoney(totalCash)}</strong>
-            </article>
-            <article>
-              <Boxes size={20} />
-              <span>Produccion hoy</span>
-              <strong>{formatMoney(totalProduction)}</strong>
-            </article>
-          </>
-        )}
+{loading ? (
+            <>
+              <MetricSkeleton />
+              <MetricSkeleton />
+              <MetricSkeleton />
+              <MetricSkeleton />
+            </>
+          ) : (
+            <>
+              <article>
+                <Banknote size={20} />
+                <span>Por cobrar hoy</span>
+                <strong>{formatMoney(sellerTargetToday)}</strong>
+              </article>
+              <article>
+                <CreditCard size={20} />
+                <span>Nequi hoy</span>
+                <strong>{formatMoney(totalNequi)}</strong>
+              </article>
+              <article>
+                <ClipboardList size={20} />
+                <span>Efectivo hoy</span>
+                <strong>{formatMoney(totalCash)}</strong>
+              </article>
+              <article>
+                <Boxes size={20} />
+                <span>Produccion hoy</span>
+                <strong>{formatMoney(totalProduction)}</strong>
+              </article>
+            </>
+          )}
       </section>
 
       {/* ── Lists ────────────────────────────────── */}
@@ -106,31 +126,40 @@ export function Dashboard({
         <div className="panel listPanel">
           <div className="panelHead">
             <div>
-              <h2>Cartera pendiente</h2>
-              <span>{activeSellerName}</span>
+              <h2>Clientes a visitar hoy</h2>
+              <span>{activeSellerName} · Meta: {formatMoney(sellerTargetToday)}</span>
             </div>
             {loading
               ? <SkeletonLine width="20px" height="1rem" />
-              : <span>{pendingBalances.length}</span>
+              : <span>{filteredBalances.length} clientes</span>
             }
           </div>
           <div className="list">
             {loading
               ? [1,2,3].map(n => <ListItemSkeleton key={n} />)
-              : pendingBalances.map((balance) => (
+              : filteredBalances.map((balance) => (
                   <article key={balance.customer_id} className="listItem">
                     <div>
                       <strong>{balance.customer_name}</strong>
-                      <span>{balance.seller_name}</span>
+                      <span>{balance.seller_name} · {formatMoney(balance.current_balance)}</span>
                     </div>
                     <b>{formatMoney(balance.current_balance)}</b>
                   </article>
                 ))
             }
-            {!loading && pendingBalances.length === 0 && (
+            {!loading && filteredBalances.length > 0 && (
+              <article className="listItem summaryRow" style={{ borderTop: '2px solid var(--border)', background: 'var(--surface-2)', fontWeight: 'bold' }}>
+                <div>
+                  <strong>META TOTAL</strong>
+                  <span>{filteredBalances.length} clientes a visitar hoy</span>
+                </div>
+                <b>{formatMoney(sellerTargetToday)}</b>
+              </article>
+            )}
+            {!loading && filteredBalances.length === 0 && (
               <article className="listItem">
                 <div>
-                  <strong>Sin cartera pendiente</strong>
+                  <strong>Sin clientes programados para hoy</strong>
                   <span>{activeSellerName}</span>
                 </div>
               </article>
@@ -143,21 +172,30 @@ export function Dashboard({
             <h2>Rendimiento hoy</h2>
             {loading
               ? <SkeletonLine width="20px" height="1rem" />
-              : <span>{dashboard?.sellers?.length || 0}</span>
+              : <span>{dashboard?.sellers?.length || 0} vendedores</span>
             }
           </div>
           <div className="list">
             {loading
               ? [1,2,3].map(n => <ListItemSkeleton key={n} />)
-              : (dashboard?.sellers || []).map((seller) => (
-                  <article key={seller.seller_id} className="listItem">
-                    <div>
-                      <strong>{seller.seller_name}</strong>
-                      <span>{formatMoney(seller.total_cash)} efectivo · {formatMoney(seller.total_nequi)} nequi</span>
-                    </div>
-                    <b>{formatMoney(seller.total_collected)}</b>
-                  </article>
-                ))
+              : (dashboard?.sellers || []).map((seller) => {
+                  const meta = Number(seller.collection_target || 0);
+                  const cobrado = Number(seller.total_collected || 0);
+                  const pendiente = meta - cobrado;
+                  return (
+                    <article key={seller.seller_id} className="listItem">
+                      <div>
+                        <strong>{seller.seller_name}</strong>
+                        <span>
+                          Meta: {formatMoney(meta)} · Cobrado: {formatMoney(cobrado)} · Pendiente: {formatMoney(pendiente > 0 ? pendiente : 0)}
+                        </span>
+                      </div>
+                      <b style={{ color: cobrado >= meta ? 'var(--green)' : 'var(--red)' }}>
+                        {formatMoney(cobrado)}
+                      </b>
+                    </article>
+                  );
+                })
             }
           </div>
         </div>

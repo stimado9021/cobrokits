@@ -48,6 +48,12 @@ async function api(path, options) {
 }
 
 export default function Home() {
+  // Helper to convert day number to name
+  function dayName(dayNum) {
+    const days = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
+    return days[dayNum] ?? "—";
+  }
+  
   const [dashboard, setDashboard] = useState(null);
   const [sellers, setSellers] = useState([]);
   const [customers, setCustomers] = useState([]);
@@ -66,11 +72,31 @@ export default function Home() {
   const [visitItems, setVisitItems] = useState([]);
   const [currentProductId, setCurrentProductId] = useState("");
   const [currentQuantity, setCurrentQuantity] = useState("");
+  const [selectedVisitCustomer, setSelectedVisitCustomer] = useState("");
 
   function addVisitItem() {
     if (!currentProductId || !currentQuantity || currentQuantity <= 0) return;
     const product = products.find(p => p.id === currentProductId);
     if (!product) return;
+    
+    // Get the selected customer from the select element
+    const customerSelect = document.getElementById('visit-customer-select');
+    const customerId = customerSelect?.value;
+    if (!customerId) {
+      alert("Seleccione un cliente primero");
+      return;
+    }
+    
+    // Validate customer's visit day matches today
+    const customer = customers.find(c => c.id === customerId);
+    if (customer) {
+      const visitDay = customer.visit_day !== null && customer.visit_day !== undefined ? Number(customer.visit_day) : null;
+      const todayDow = new Date().getDay();
+      if (visitDay !== null && visitDay !== todayDow) {
+        alert(`${customer.name} solo se visita los ${dayName(visitDay)}. Hoy es ${dayName(todayDow)}.`);
+        return;
+      }
+    }
     
     setVisitItems(prev => {
       const existing = prev.find(item => item.product_id === currentProductId);
@@ -338,6 +364,7 @@ export default function Home() {
       setVisitItems([]);
       setCurrentProductId("");
       setCurrentQuantity("");
+      setSelectedVisitCustomer("");
       setVisitFormKey((key) => key + 1);
       setNotice("Visita registrada");
       await loadAll();
@@ -438,6 +465,13 @@ export default function Home() {
 
         {notice ? <div className="notice">{notice}</div> : null}
 
+        {loading && (
+          <div className="loading-overlay">
+            <div className="spinner-lg" />
+            <span>Cargando datos…</span>
+          </div>
+        )}
+
         {activeTab === 'dashboard' && (
           <Dashboard
             dashboard={dashboard}
@@ -465,8 +499,11 @@ export default function Home() {
             visitItems={visitItems}
             removeVisitItem={removeVisitItem}
             isSubmitting={isSubmitting}
+            loading={loading}
             visits={visits}
             activeSellerName={activeSellerName}
+            selectedVisitCustomer={selectedVisitCustomer}
+            setSelectedVisitCustomer={setSelectedVisitCustomer}
           />
         }
         {activeTab === 'clientes' && 
@@ -478,6 +515,7 @@ export default function Home() {
             updateCustomer={(id, data) => updateEntity('customers', id, data)}
             deleteCustomer={(id) => deleteEntity('customers', id)}
             isSubmitting={isSubmitting}
+            loading={loading}
           />
         }
         {activeTab === 'entregar-inventario' && 
@@ -513,6 +551,7 @@ export default function Home() {
             updateProduct={(id, data) => updateEntity('products', id, data)}
             deleteProduct={(id) => deleteEntity('products', id)}
             isSubmitting={isSubmitting}
+            loading={loading}
           />
         }
 

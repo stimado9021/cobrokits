@@ -2,7 +2,7 @@ import { useState } from "react";
 import { UserPlus, PackagePlus, Edit2, Trash2 } from "lucide-react";
 import { Modal } from "./Modal";
 
-export function Configuracion({ createSeller, createProduct, sellers, products, updateSeller, deleteSeller, updateProduct, deleteProduct, isSubmitting }) {
+export function Configuracion({ createSeller, createProduct, sellers, products, updateSeller, deleteSeller, updateProduct, deleteProduct, isSubmitting, loading = false }) {
   const [editingSeller, setEditingSeller] = useState(null);
   const [editingProduct, setEditingProduct] = useState(null);
 
@@ -17,7 +17,7 @@ export function Configuracion({ createSeller, createProduct, sellers, products, 
             {isSubmitting ? <span className="spinner" /> : <UserPlus size={18} />}
           </button>
         </form>
-        <table className="dataTable">
+        <table className="dataTable skel-table">
           <thead>
             <tr>
               <th>Nombre</th>
@@ -27,7 +27,16 @@ export function Configuracion({ createSeller, createProduct, sellers, products, 
             </tr>
           </thead>
           <tbody>
-            {sellers.map(s => (
+            {loading ? (
+              [1,2,3].map(n => (
+                <tr key={`skel-s-${n}`}>
+                  <td><div className="skel skel-line" style={{width:'70%'}} /></td>
+                  <td><div className="skel skel-line" style={{width:'55%'}} /></td>
+                  <td><div className="skel skel-line" style={{width:'50px'}} /></td>
+                  <td><div className="skel skel-line" style={{width:'60px'}} /></td>
+                </tr>
+              ))
+            ) : sellers.map(s => (
               <tr key={s.id}>
                 <td>{s.name}</td>
                 <td>{s.phone || '-'}</td>
@@ -56,7 +65,7 @@ export function Configuracion({ createSeller, createProduct, sellers, products, 
             {isSubmitting ? <span className="spinner" /> : <PackagePlus size={18} />}
           </button>
         </form>
-        <table className="dataTable">
+        <table className="dataTable skel-table">
           <thead>
             <tr>
               <th>Nombre</th>
@@ -66,7 +75,16 @@ export function Configuracion({ createSeller, createProduct, sellers, products, 
             </tr>
           </thead>
           <tbody>
-            {products.map(p => (
+            {loading ? (
+              [1,2,3].map(n => (
+                <tr key={`skel-p-${n}`}>
+                  <td><div className="skel skel-line" style={{width:'70%'}} /></td>
+                  <td><div className="skel skel-line" style={{width:'50px'}} /></td>
+                  <td><div className="skel skel-line" style={{width:'50px'}} /></td>
+                  <td><div className="skel skel-line" style={{width:'60px'}} /></td>
+                </tr>
+              ))
+            ) : products.map(p => (
               <tr key={p.id}>
                 <td>{p.name}</td>
                 <td>${Number(p.investment_cost).toLocaleString()}</td>

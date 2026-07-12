@@ -16,6 +16,7 @@ export async function GET(request) {
           c.address,
           c.phone,
           c.notes,
+          c.visit_day,
           c.is_active,
           c.current_balance,
           c.created_at,
@@ -39,11 +40,11 @@ export async function POST(request) {
     const body = await request.json();
     const [customer] = await query(
       `
-        INSERT INTO cobrokits.customers (seller_id, name, address, phone, notes)
-        VALUES ($1, $2, $3, $4, $5)
-        RETURNING id, seller_id, name, address, phone, notes, is_active, current_balance, created_at
+        INSERT INTO cobrokits.customers (seller_id, name, address, phone, notes, visit_day)
+        VALUES ($1, $2, $3, $4, $5, $6)
+        RETURNING id, seller_id, name, address, phone, notes, visit_day, is_active, current_balance, created_at
       `,
-      [body.seller_id, body.name, body.address, body.phone || null, body.notes || null],
+      [body.seller_id, body.name, body.address, body.phone || null, body.notes || null, body.visit_day ?? null],
     );
     return ok({ customer }, { status: 201 });
   } catch (error) {
@@ -57,11 +58,11 @@ export async function PUT(request) {
     const [customer] = await query(
       `
         UPDATE cobrokits.customers
-        SET name = $2, address = $3, phone = $4, notes = $5
+        SET name = $2, address = $3, phone = $4, notes = $5, visit_day = $6
         WHERE id = $1
-        RETURNING id, seller_id, name, address, phone, notes, is_active, current_balance, updated_at
+        RETURNING id, seller_id, name, address, phone, notes, visit_day, is_active, current_balance, updated_at
       `,
-      [body.id, body.name, body.address, body.phone || null, body.notes || null],
+      [body.id, body.name, body.address, body.phone || null, body.notes || null, body.visit_day ?? null],
     );
     return ok({ customer });
   } catch (error) {

@@ -3,7 +3,10 @@ const c = new Client({connectionString: 'postgresql://neondb_owner:npg_Th3P0LZKV
 (async () => {
   await c.connect();
   await c.query("SET search_path TO cobrokits, public");
-  const r = await c.query("SELECT proname FROM pg_proc WHERE pronamespace='cobrokits'::regnamespace AND (proname LIKE '%weekly%' OR proname LIKE '%report%')");
-  r.rows.forEach(x => console.log(x.proname));
+  
+  // Check if function exists
+  const r = await c.query("SELECT proname FROM pg_proc WHERE proname = 'get_collection_target' AND pronamespace = 'cobrokits'::regnamespace");
+  console.log('Function exists:', r.rows.length > 0);
+  
   await c.end();
 })();

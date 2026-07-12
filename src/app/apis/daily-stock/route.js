@@ -16,7 +16,7 @@ export async function GET(request) {
 
     const rows = await query(
       `
-      SELECT dss.*, p.name AS product_name, p.sale_price
+      SELECT dss.*, p.name AS product_name, p.sale_price, p.investment_cost
       FROM cobrokits.daily_seller_stock dss
       JOIN cobrokits.products p ON p.id = dss.product_id
       WHERE dss.seller_id = $1::uuid

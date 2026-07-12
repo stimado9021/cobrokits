@@ -2,6 +2,12 @@ import { useEffect, useMemo, useState } from "react";
 import { Edit2, Trash2, UserPlus } from "lucide-react";
 import { Modal } from "./Modal";
 
+// Helper to convert day number to name
+function dayName(dayNum) {
+  const days = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
+  return days[dayNum] ?? "—";
+}
+
 export function NuevoCliente({
   createCustomer,
   sellers = [],
@@ -10,6 +16,7 @@ export function NuevoCliente({
   updateCustomer,
   deleteCustomer,
   isSubmitting,
+  loading = false,
 }) {
   const [editingCustomer, setEditingCustomer] = useState(null);
   const [selectedSellerId, setSelectedSellerId] = useState(activeSellerId || "");
@@ -68,6 +75,20 @@ export function NuevoCliente({
           <input name="notes" placeholder="Nota u observacion" />
         </label>
 
+        <label className="field">
+          <span>Día de visita (0=Dom, 1=Lun... 6=Sab)</span>
+          <select name="visit_day">
+            <option value="">Sin día fijo</option>
+            <option value={0}>Domingo</option>
+            <option value={1}>Lunes</option>
+            <option value={2}>Martes</option>
+            <option value={3}>Miércoles</option>
+            <option value={4}>Jueves</option>
+            <option value={5}>Viernes</option>
+            <option value={6}>Sábado</option>
+          </select>
+        </label>
+
         <button className="primary" type="submit" disabled={isSubmitting}>
           {isSubmitting ? <span className="spinner" /> : <UserPlus size={17} />}
           {isSubmitting ? "Guardando..." : "Crear"}
@@ -79,13 +100,39 @@ export function NuevoCliente({
           <div className="panelHead">
             <h2>Lista de Clientes</h2>
           </div>
-          {sellerCustomers.length > 0 ? (
+          {loading ? (
+            <table className="dataTable skel-table">
+              <thead>
+                <tr>
+                  <th>Nombre</th>
+                  <th>Direccion</th>
+                  <th>Telefono</th>
+                  <th>Día visita</th>
+                  <th>Observacion</th>
+                  <th>Acciones</th>
+                </tr>
+              </thead>
+              <tbody>
+                {[1,2,3,4].map(n => (
+                  <tr key={`skel-${n}`}>
+                    <td><div className="skel skel-line" style={{width:'75%'}} /></td>
+                    <td><div className="skel skel-line" style={{width:'60%'}} /></td>
+                    <td><div className="skel skel-line" style={{width:'50%'}} /></td>
+                    <td><div className="skel skel-line" style={{width:'50px'}} /></td>
+                    <td><div className="skel skel-line" style={{width:'40%'}} /></td>
+                    <td><div className="skel skel-line" style={{width:'60px'}} /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          ) : sellerCustomers.length > 0 ? (
             <table className="dataTable">
               <thead>
                 <tr>
                   <th>Nombre</th>
                   <th>Direccion</th>
                   <th>Telefono</th>
+                  <th>Día visita</th>
                   <th>Observacion</th>
                   <th>Acciones</th>
                 </tr>
@@ -96,6 +143,7 @@ export function NuevoCliente({
                     <td>{customer.name}</td>
                     <td>{customer.address}</td>
                     <td>{customer.phone || "-"}</td>
+                    <td>{customer.visit_day !== null && customer.visit_day !== undefined ? dayName(Number(customer.visit_day)) : "—"}</td>
                     <td>{customer.notes || "-"}</td>
                     <td>
                       <button
@@ -167,6 +215,19 @@ export function NuevoCliente({
                 defaultValue={editingCustomer.notes || ""}
                 placeholder="Observacion"
               />
+            </label>
+            <label className="field">
+              <span>Día de visita (0=Dom, 1=Lun... 6=Sab)</span>
+              <select name="visit_day" defaultValue={editingCustomer.visit_day ?? ""}>
+                <option value="">Sin día fijo</option>
+                <option value={0}>Domingo</option>
+                <option value={1}>Lunes</option>
+                <option value={2}>Martes</option>
+                <option value={3}>Miércoles</option>
+                <option value={4}>Jueves</option>
+                <option value={5}>Viernes</option>
+                <option value={6}>Sábado</option>
+              </select>
             </label>
             <button type="submit" className="primary" style={{ marginTop: "10px" }} disabled={isSubmitting}>
               {isSubmitting ? <span className="spinner" /> : null}

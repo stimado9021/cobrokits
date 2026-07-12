@@ -218,11 +218,139 @@
         };
 
         const money = value => '$' + Number(value || 0).toLocaleString('es-CO');
+
         const api = async (action, options = {}) => {
-            const res = await fetch(`api.php?action=${action}`, options);
+            const parts = action.split('&');
+            const baseAction = parts[0];
+            const params = {};
+            for (let i = 1; i < parts.length; i++) {
+                const [k, v] = parts[i].split('=');
+                params[k] = decodeURIComponent(v || '');
+            }
+
+            const routes = {
+                'bootstrap':         { path: '/apis/dashboard', method: 'GET' },
+                'listar_vendedores': { path: '/apis/sellers', method: 'GET' },
+                'listar_productos':  { path: '/apis/products', method: 'GET' },
+                'dashboard':         { path: '/apis/dashboard', method: 'GET' },
+                'listar_clientes':   { path: '/apis/customers', method: 'GET' },
+                'listar_stock':      { path: '/apis/inventory', method: 'GET' },
+                'entregar_stock':    { path: '/apis/inventory', method: 'POST' },
+                'registrar_visita':  { path: '/apis/visits', method: 'POST' },
+                'reporte_vendedor':  { path: '/apis/seller-report', method: 'GET' },
+                'historial_cliente': { path: '/apis/visits', method: 'GET' },
+                'crear_vendedor':    { path: '/apis/sellers', method: 'POST' },
+                'crear_cliente':     { path: '/apis/customers', method: 'POST' },
+                'crear_producto':    { path: '/apis/products', method: 'POST' },
+            };
+
+            const route = routes[baseAction];
+            if (!route) throw new Error(`Acción no reconocida: ${baseAction}`);
+
+            let url = route.path;
+            let fetchOpts = {};
+
+            if (route.method === 'GET') {
+                const query = new URLSearchParams();
+                if (params.seller_id) query.set('sellerId', params.seller_id);
+                if (params.client_id) query.set('customerId', params.client_id);
+                if (params.date) query.set('date', params.date);
+                const qs = query.toString();
+                if (qs) url += '?' + qs;
+            } else if (route.method === 'POST') {
+                const body = {};
+                if (options.body && typeof options.body.entries === 'function') {
+                    for (const [key, val] of options.body.entries()) {
+                        if (key === 'client_id') body.customer_id = val;
+                        else body[key] = val;
+                    }
+                    if (body.items && typeof body.items === 'string') {
+                        try { body.items = JSON.parse(body.items); } catch (e) { body.items = []; }
+                    }
+                    if (body.payment_amount) body.payment_amount = Number(body.payment_amount);
+                    if (body.quantity) body.quantity = Number(body.quantity);
+                    if (!body.notes) body.notes = '';
+                }
+                fetchOpts = {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body),
+                };
+            }
+
+            const res = await fetch(url, fetchOpts);
             const data = await res.json();
             if (!data.success) throw new Error(data.message || 'Error');
-            return data;
+
+            switch (baseAction) {
+                case 'bootstrap':
+                    return { success: true };
+                case 'listar_vendedores':
+                    return { sellers: data.sellers || [] };
+                case 'listar_productos':
+                    return { products: data.products || [] };
+                case 'dashboard': {
+                    const sellerPortfolios = {};
+                    (data.balances || []).forEach(b => {
+                        const sid = b.seller_id;
+                        if (!sellerPortfolios[sid]) sellerPortfolios[sid] = 0;
+                        sellerPortfolios[sid] += Number(b.current_balance || 0);
+                    });
+                    return {
+                        dashboard: {
+                            cartera_total: data.totals?.total_portfolio || 0,
+                            recaudo_hoy: data.totals?.collected_today || 0,
+                            efectivo_hoy: data.totals?.cash_today || 0,
+                            nequi_hoy: data.totals?.nequi_today || 0,
+                            produccion_hoy: data.totals?.production_today || 0,
+                            inversion_hoy: data.totals?.investment_today || 0,
+                            vendedores: (data.sellers || []).map(s => ({
+                                name: s.seller_name,
+                                cartera: sellerPortfolios[s.seller_id] || 0,
+                                recaudo_hoy: s.collected_today || 0,
+                                efectivo_hoy: s.total_cash || 0,
+                                nequi_hoy: s.total_nequi || 0,
+                            })),
+                        },
+                    };
+                }
+                case 'listar_clientes':
+                    return {
+                        clients: (data.customers || []).map(c => ({
+                            id: c.id,
+                            seller_id: c.seller_id,
+                            seller_name: c.seller_name,
+                            name: c.name,
+                            address: c.address,
+                            phone: c.phone,
+                            current_balance: c.current_balance,
+                        })),
+                    };
+                case 'listar_stock':
+                    return {
+                        stock: (data.inventory || []).map(i => ({
+                            product_name: i.product_name,
+                            seller_name: i.seller_name,
+                            quantity: i.quantity,
+                            sale_price: i.sale_price,
+                        })),
+                    };
+                case 'reporte_vendedor':
+                    return { report: data.report };
+                case 'historial_cliente':
+                    return {
+                        visits: (data.visits || []).map(v => ({
+                            visit_date: v.visit_date,
+                            previous_balance: Number(v.previous_balance || 0),
+                            new_products_total: Number(v.new_products_total || 0),
+                            payment_amount: Number(v.payment_amount || 0),
+                            new_balance: Number(v.new_balance || 0),
+                            products_summary: v.products_summary || 'Sin productos',
+                        })),
+                    };
+                default:
+                    return data;
+            }
         };
 
         document.addEventListener('DOMContentLoaded', async () => {
@@ -490,7 +618,7 @@
                 const data = await api(`historial_cliente&client_id=${clientId}`);
                 const client = state.clients.find(c => String(c.id) === String(clientId));
                 const lines = data.visits.map(v => {
-                    const items = v.items.map(i => `${i.quantity} x ${i.product_name}`).join(', ') || 'Sin productos';
+                    const items = v.products_summary || 'Sin productos';
                     return `${new Date(v.visit_date).toLocaleString('es-CO')}\nProductos: ${items}\nAnterior ${money(v.previous_balance)} + Nuevo ${money(v.new_products_total)} - Abono ${money(v.payment_amount)} = ${money(v.new_balance)}`;
                 }).join('\n\n');
                 alert(`${client?.name || 'Cliente'}\n\n${lines || 'Sin historial'}`);

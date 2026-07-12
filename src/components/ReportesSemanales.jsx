@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import {
   ChevronLeft, ChevronRight, Calendar,
-  RefreshCcw, User, ShoppingBag, Banknote
+  RefreshCcw
 } from "lucide-react";
 
 /* ─── Helpers ─────────────────────────────────────────── */
@@ -39,13 +39,6 @@ function formatWeekRange(weekStart) {
   return `${formatDate(toISODate(weekStart))} – ${formatDate(toISODate(end))} · ${end.getFullYear()}`;
 }
 
-function formatDateTime(iso) {
-  return new Date(iso).toLocaleString("es-CO", {
-    day: "2-digit", month: "2-digit",
-    hour: "2-digit", minute: "2-digit",
-  });
-}
-
 function n(val) {
   const v = parseFloat(val);
   return isNaN(v) ? 0 : v;
@@ -67,14 +60,13 @@ function moneyColored(val, zeroClass = "empty") {
   return <span className={v > 0 ? "positive" : "negative"}>{fmt.format(v)}</span>;
 }
 
-const METHOD_LABELS = { efectivo: "Efectivo", nequi: "Nequi", cash: "Efectivo", transfer: "Transferencia" };
-
 /* ─── Row definitions (matches the physical ledger) ───── */
 const ROWS = [
   { key: "suma_entrega",        label: "Suma Ventas",          type: "money",   editable: false, desc: "Ventas nuevas dejadas en crédito" },
   { key: "abono_total",         label: "Abn (Abonaron)",       type: "money",   editable: false, desc: "Total recibido en abonos ese día (Efectivo + Nequi)" },
   { key: "clientes_no_llevaron",label: "CNL (Canceladas)",     type: "number",  editable: false, desc: "Clientes que pagaron todo y su saldo quedó en 0 ese día" },
-  { key: "visitas_totales",     label: "UV (Visitas)",         type: "number",  editable: false, desc: "Total de clientes atendidos" },
+  { key: "visitas_totales",     label: "Unid/Vendidas",         type: "number",  editable: false, desc: "Total de unidades vendidas (suma de cantidades)" },
+  { key: "inversion_dia",       label: "Costo inicial",        type: "money",   editable: false, desc: "Costo de inversion de los productos entregados" },
   { key: "efectividad_pct",     label: "% Efectividad",        type: "percent", editable: false, desc: "Visitas / clientes activos totales" },
   { key: "m1_efectivo",         label: "m1 (Efectivo)",        type: "money",   editable: false, desc: "Recaudo en efectivo" },
   { key: "m2_nequi",            label: "M2 (Nequi)",           type: "money",   editable: false, desc: "Recaudo por Nequi" },
@@ -106,16 +98,11 @@ export function ReportesSemanales({ activeSellerId = "", activeSellerName = "Tod
   const [days, setDays] = useState(() =>
     Array.from({ length: 7 }, (_, i) => emptyDay(toISODate(addDays(getWeekStart(new Date()), i))))
   );
-  const [carteraActual, setCarteraActual] = useState(0);
   const [loading, setLoading] = useState(false);
 
   // Editing state: { dayIdx, key, value }
   const [editing, setEditing] = useState(null);
   const [saving, setSaving] = useState(false);
-
-  // Visits panel
-  const [visits, setVisits] = useState([]);
-  const [visitsLoading, setVisitsLoading] = useState(false);
 
   /* Load weekly data from API */
   const loadWeek = useCallback(async (ws) => {
@@ -127,34 +114,14 @@ export function ReportesSemanales({ activeSellerId = "", activeSellerName = "Tod
       const data = await res.json();
       if (data.success) {
         setDays(data.days);
-        setCarteraActual(n(data.cartera_actual));
       }
     } catch { /* silent */ }
     finally { setLoading(false); }
   }, [activeSellerId]);
 
-  /* Load visits for the week */
-  const loadVisits = useCallback(async (weekStartDate) => {
-    setVisitsLoading(true);
-    try {
-      if (!weekStartDate) { setVisitsLoading(false); return; }
-      const weekEndDate = addDays(weekStartDate, 7);
-      const params = new URLSearchParams({
-        dateFrom: toISODate(weekStartDate),
-        dateTo: toISODate(weekEndDate),
-      });
-      if (activeSellerId) params.set("sellerId", activeSellerId);
-      const res = await fetch(`/apis/visits?${params.toString()}`);
-      const data = await res.json();
-      if (data.success) setVisits(data.visits || []);
-    } catch { /* silent */ }
-    finally { setVisitsLoading(false); }
-  }, [activeSellerId]);
-
   useEffect(() => {
     loadWeek(weekStart);
-    loadVisits(weekStart);
-  }, [loadWeek, loadVisits, weekStart]);
+  }, [loadWeek, weekStart]);
 
   function prevWeek() { setWeekStart(w => addDays(w, -7)); }
   function nextWeek() { setWeekStart(w => addDays(w, 7)); }
@@ -204,13 +171,6 @@ export function ReportesSemanales({ activeSellerId = "", activeSellerName = "Tod
     acc[row.key] = days.reduce((s, d) => s + n(d[row.key] ?? 0), 0);
     return acc;
   }, {});
-
-  /* Filter visits for current week */
-  const weekEnd = addDays(weekStart, 7);
-  const weekVisits = visits.filter(v => {
-    const d = new Date(v.visit_date);
-    return d >= weekStart && d < weekEnd;
-  });
 
   /* Render a cell value */
   function renderCell(row, dayData, dayIdx) {
@@ -301,140 +261,59 @@ export function ReportesSemanales({ activeSellerId = "", activeSellerName = "Tod
         <p className="reportes-hint">Las celdas en <span style={{color:"var(--brand)"}}>verde</span> son editables. El resto se calcula automáticamente.</p>
       </div>
 
-      {/* Body */}
-      <div className="reportes-body">
-        {/* Left: main table */}
-        <div className="reportes-left">
-          <div className="wr-table-wrap">
-            <table className="wr-table">
-              <thead>
-                <tr>
-                  <th className="wr-th-label">Fecha</th>
+      {/* Table full width */}
+      <div className="wr-table-wrap">
+        <table className="wr-table">
+          <thead>
+            <tr>
+              <th className="wr-th-label">Fecha</th>
+              {ROWS.map((row) => (
+                <th key={row.key} className="wr-th-metric" title={row.desc}>
+                  {row.label}
+                </th>
+              ))}
+            </tr>
+          </thead>
+          <tbody>
+            {loading ? (
+              [1,2,3,4,5,6,7].map(di => (
+                <tr key={`skel-${di}`} className={di % 2 === 0 ? "row-even" : "row-odd"}>
+                  <td className="wr-row-label"><div className="skel skel-line" style={{width:'60px'}} /></td>
                   {ROWS.map((row) => (
-                    <th key={row.key} className="wr-th-metric" title={row.desc}>
-                      {row.label}
-                    </th>
+                    <td key={row.key} className={metricCellClass(row)}>
+                      <div className="skel skel-line" style={{width: row.type === 'text' ? '80%' : '50px'}} />
+                    </td>
                   ))}
                 </tr>
-              </thead>
-              <tbody>
-                {days.map((dayData, di) => (
-                  <tr
-                    key={dayData.day || di}
-                    className={di % 2 === 0 ? "row-even" : "row-odd"}
-                  >
-                    {/* Row label */}
-                    <td className="wr-row-label">
-                      <span className="wr-label-text">{DAYS_ES[di]}</span>
-                      <span className="wr-day-date">{dayData?.day ? formatDate(dayData.day) : ""}</span>
-                    </td>
-                    {/* Day cells */}
-                    {ROWS.map((row) => (
-                      <td key={row.key} className={metricCellClass(row)}>
-                        {renderCell(row, dayData, di)}
-                      </td>
-                    ))}
-                  </tr>
-                ))}
-                <tr className="wr-total-row">
-                  <td className="wr-row-label">
-                    <span className="wr-label-text">Total</span>
+              ))
+            ) : days.map((dayData, di) => (
+              <tr
+                key={dayData.day || di}
+                className={di % 2 === 0 ? "row-even" : "row-odd"}
+              >
+                <td className="wr-row-label">
+                  <span className="wr-label-text">{DAYS_ES[di]}</span>
+                  <span className="wr-day-date">{dayData?.day ? formatDate(dayData.day) : ""}</span>
+                </td>
+                {ROWS.map((row) => (
+                  <td key={row.key} className={metricCellClass(row)}>
+                    {renderCell(row, dayData, di)}
                   </td>
-                  {ROWS.map((row) => (
-                    <td key={row.key} className={`${metricCellClass(row)} wr-total-cell`}>
-                      {renderTotal(row)}
-                    </td>
-                  ))}
-                </tr>
-              </tbody>
-            </table>
-          </div>
-
-          {/* Summary cards */}
-          <div className="reportes-cards">
-            <div className="reportes-card">
-              <span>Cartera activa</span>
-              <strong>{money(carteraActual)}</strong>
-            </div>
-            <div className="reportes-card">
-              <span>Recaudo (m1 efectivo)</span>
-              <strong>{money(totals.m1_efectivo)}</strong>
-            </div>
-            <div className="reportes-card">
-              <span>Recaudo (M2 Nequi)</span>
-              <strong>{money(totals.m2_nequi)}</strong>
-            </div>
-            <div className="reportes-card">
-              <span>Abono total semana</span>
-              <strong>{money(totals.abono_total)}</strong>
-            </div>
-            <div className="reportes-card">
-              <span>Ventas semana</span>
-              <strong>{money(totals.suma_entrega)}</strong>
-            </div>
-            <div className="reportes-card">
-              <span>Gastos semana</span>
-              <strong className="negative">{money(totals.gasto)}</strong>
-            </div>
-            <div className={`reportes-card card-ganancia ${n(totals.ganancia) >= 0 ? "gain-positive" : "gain-negative"}`}>
-              <span>Ganancia neta semana</span>
-              <strong>{money(totals.ganancia)}</strong>
-            </div>
-          </div>
-        </div>
-
-        {/* Right: visits panel */}
-        <div className="visits-panel">
-          <div className="visits-panel-header">
-            <h3>Visitas de la semana</h3>
-            <button className="iconButton" onClick={() => loadVisits(weekStart)} disabled={visitsLoading} title="Actualizar">
-              <RefreshCcw size={15} className={visitsLoading ? "spin" : ""} />
-            </button>
-          </div>
-          <div className="visits-count-badge">{weekVisits.length} visita{weekVisits.length !== 1 ? "s" : ""}</div>
-
-          {visitsLoading && <p className="visits-loading">Cargando visitas…</p>}
-          {!visitsLoading && weekVisits.length === 0 && (
-            <p className="visits-empty">No hay visitas registradas esta semana.</p>
-          )}
-
-          <ul className="visits-list">
-            {weekVisits.map((v, i) => (
-              <li key={v.id || i} className="visit-item">
-                <div className="visit-meta">
-                  <span className="visit-date">{formatDateTime(v.visit_date)}</span>
-                </div>
-                <div className="visit-row">
-                  <User size={13} className="visit-icon" />
-                  <span className="visit-label">Vendedor</span>
-                  <span className="visit-value">{v.seller_name}</span>
-                </div>
-                <div className="visit-row">
-                  <User size={13} className="visit-icon muted" />
-                  <span className="visit-label">Cliente</span>
-                  <span className="visit-value">{v.customer_name}</span>
-                </div>
-                <div className="visit-row">
-                  <ShoppingBag size={13} className="visit-icon" />
-                  <span className="visit-label">Compra</span>
-                  <span className="visit-value positive">{money(v.new_products_total)}</span>
-                </div>
-                {n(v.payment_amount) > 0 && (
-                  <div className="visit-row">
-                    <Banknote size={13} className="visit-icon gain-positive" />
-                    <span className="visit-label">Abono</span>
-                    <span className="visit-value gain-positive">
-                      {money(v.payment_amount)}
-                      {v.payment_method && (
-                        <span className="visit-method">{METHOD_LABELS[v.payment_method] || v.payment_method}</span>
-                      )}
-                    </span>
-                  </div>
-                )}
-              </li>
+                ))}
+              </tr>
             ))}
-          </ul>
-        </div>
+            <tr className="wr-total-row">
+              <td className="wr-row-label">
+                <span className="wr-label-text">Total</span>
+              </td>
+              {ROWS.map((row) => (
+                <td key={row.key} className={`${metricCellClass(row)} wr-total-cell`}>
+                  {renderTotal(row)}
+                </td>
+              ))}
+            </tr>
+          </tbody>
+        </table>
       </div>
     </div>
   );
