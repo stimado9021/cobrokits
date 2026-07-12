@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from "react";
-import { Plus, History, Package } from "lucide-react";
+import { useState, useEffect, useCallback, useRef } from "react";
+import { Plus, History, Package, FileDown } from "lucide-react";
 
 async function api(path, options) {
   const response = await fetch(path, {
@@ -168,6 +168,7 @@ function ProductRow({ product, onAdded }) {
 export function Inventario() {
   const [stock, setStock] = useState([]);
   const [loadingStock, setLoadingStock] = useState(true);
+  const [generatingPdf, setGeneratingPdf] = useState(false);
 
   const [selectedProductId, setSelectedProductId] = useState(null);
   const [selectedProductName, setSelectedProductName] = useState("todos los productos");
@@ -225,6 +226,80 @@ export function Inventario() {
     loadHistory(productId);
   }
 
+  async function generatePdf() {
+    if (generatingPdf || stock.length === 0) return;
+    setGeneratingPdf(true);
+    try {
+      const html2pdf = (await import("html2pdf.js")).default;
+
+      const today = new Intl.DateTimeFormat("es-CO", {
+        timeZone: "America/Bogota",
+        year: "numeric", month: "long", day: "numeric",
+      }).format(new Date());
+
+      const totalUnits = stock.reduce((s, p) => s + Number(p.quantity), 0);
+
+      // Build PDF content
+      const container = document.createElement("div");
+      container.style.fontFamily = "Arial, sans-serif";
+      container.style.padding = "20px";
+      container.style.color = "#1a1a1a";
+
+      container.innerHTML = `
+        <div style="text-align: center; margin-bottom: 24px; border-bottom: 2px solid #7c3aed; padding-bottom: 16px;">
+          <h1 style="margin: 0; font-size: 22px; color: #7c3aed;">CobroKits</h1>
+          <p style="margin: 4px 0 0; font-size: 12px; color: #666;">Consignacion semanal</p>
+          <h2 style="margin: 12px 0 0; font-size: 18px;">Inventario General</h2>
+          <p style="margin: 4px 0 0; font-size: 12px; color: #666;">${today}</p>
+        </div>
+
+        <table style="width: 100%; border-collapse: collapse; margin-bottom: 20px;">
+          <thead>
+            <tr style="background: #7c3aed; color: white;">
+              <th style="padding: 10px 12px; text-align: left; font-size: 13px;">#</th>
+              <th style="padding: 10px 12px; text-align: left; font-size: 13px;">Producto</th>
+              <th style="padding: 10px 12px; text-align: center; font-size: 13px;">Stock</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${stock.map((p, i) => `
+              <tr style="background: ${i % 2 === 0 ? "#f9f9f9" : "#fff"};">
+                <td style="padding: 8px 12px; font-size: 12px; color: #666;">${i + 1}</td>
+                <td style="padding: 8px 12px; font-size: 13px; font-weight: 500;">${p.name}</td>
+                <td style="padding: 8px 12px; text-align: center; font-size: 14px; font-weight: bold; color: ${Number(p.quantity) > 0 ? "#16a34a" : "#dc2626"};">${p.quantity}</td>
+              </tr>
+            `).join("")}
+          </tbody>
+          <tfoot>
+            <tr style="background: #f3f0ff; border-top: 2px solid #7c3aed;">
+              <td style="padding: 10px 12px; font-weight: bold; font-size: 13px;" colspan="2">Total unidades</td>
+              <td style="padding: 10px 12px; text-align: center; font-weight: bold; font-size: 14px; color: #7c3aed;">${totalUnits}</td>
+            </tr>
+          </tfoot>
+        </table>
+
+        <div style="text-align: center; font-size: 10px; color: #999; margin-top: 24px; border-top: 1px solid #eee; padding-top: 8px;">
+          Generado por CobroKits · ${today}
+        </div>
+      `;
+
+      await html2pdf()
+        .set({
+          margin: [10, 10, 10, 10],
+          filename: `inventario-general-${new Date().toISOString().slice(0, 10)}.pdf`,
+          image: { type: "jpeg", quality: 0.98 },
+          html2canvas: { scale: 2 },
+          jsPDF: { unit: "mm", format: "letter", orientation: "portrait" },
+        })
+        .from(container)
+        .save();
+    } catch (err) {
+      console.error("Error generating PDF:", err);
+    } finally {
+      setGeneratingPdf(false);
+    }
+  }
+
   return (
     <div
       style={{
@@ -236,9 +311,20 @@ export function Inventario() {
     >
       {/* ── LEFT: Products + stock ─────────────── */}
       <div className="panel">
-        <div className="panelHead">
-          <h2>Inventario General</h2>
-          <span>{stock.length}</span>
+        <div className="panelHead" style={{ justifyContent: "space-between" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <h2>Inventario General</h2>
+            <span>{stock.length}</span>
+          </div>
+          <button
+            className="iconButton"
+            onClick={generatePdf}
+            disabled={generatingPdf || loadingStock || stock.length === 0}
+            title="Descargar PDF"
+            style={{ opacity: generatingPdf ? 0.5 : 1 }}
+          >
+            {generatingPdf ? <span className="spinner" /> : <FileDown size={18} />}
+          </button>
         </div>
         <p style={{ color: "var(--muted)", fontSize: "0.85rem", margin: "0 0 12px" }}>
           Haz clic en <Plus size={11} style={{ verticalAlign: "middle" }} /> para

@@ -10,6 +10,7 @@
     "db:seed": "node scripts/seed-data.mjs"
   },
   "dependencies": {
+    "html2pdf.js": "^0.14.0",
     "lucide-react": "^1.21.0",
     "next": "^16.2.9",
     "pg": "^8.22.0",
