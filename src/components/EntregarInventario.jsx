@@ -129,6 +129,10 @@ export function EntregarInventario({
     return dailyRows.reduce((sum, r) => sum + (r.sold * r.investment_cost), 0);
   }, [dailyRows]);
 
+  const ventaVendido = useMemo(() => {
+    return dailyRows.reduce((sum, r) => sum + (r.sold * r.sale_price), 0);
+  }, [dailyRows]);
+
   async function handleCloseDay() {
     if (!selectedSellerId || closing) return;
     setClosing(true);
@@ -316,9 +320,11 @@ export function EntregarInventario({
               {dailyRows.length > 0 && (
                 <tfoot>
                   <tr>
-                    <td><strong>Total inversion vendido</strong></td>
+                    <td><strong>Total vendido</strong></td>
                     <td></td>
-                    <td style={{ fontWeight: "bold", color: "var(--red)" }}>{formatMoney(inversionVendido)}</td>
+                    <td style={{ fontWeight: "bold", color: "var(--red)" }}>
+                      {formatMoney(inversionVendido)}/{formatMoney(ventaVendido)}
+                    </td>
                     <td colSpan={isPastDay || dailyRows.some(r => r.is_closed) ? 2 : 1}></td>
                   </tr>
                 </tfoot>
