@@ -98,13 +98,24 @@ export async function GET(request) {
         JOIN cobrokits.customers c ON c.is_active = true AND c.visit_day = EXTRACT(DOW FROM wd.day)::int
         WHERE ($2::uuid IS NULL OR c.seller_id = $2::uuid)
         GROUP BY wd.day, EXTRACT(DOW FROM wd.day)
+      ),
+      -- Unique customers who bought or paid today
+      daily_active_customers AS (
+        SELECT
+          (cv.visit_date AT TIME ZONE 'America/Bogota')::date AS day,
+          COUNT(DISTINCT cv.customer_id) AS clientes_activos
+        FROM cobrokits.customer_visits cv
+        WHERE (cv.visit_date AT TIME ZONE 'America/Bogota')::date BETWEEN $1::date AND ($1::date + interval '6 days')
+          AND ($2::uuid IS NULL OR cv.seller_id = $2::uuid)
+          AND (cv.payment_amount > 0 OR cv.new_products_total > 0)
+        GROUP BY (cv.visit_date AT TIME ZONE 'America/Bogota')::date
       )
       SELECT
         wd.day::text                                              AS day,
         COALESCE(dp.m1_efectivo, 0)                              AS m1_efectivo,
         COALESCE(dp.m2_nequi, 0)                                 AS m2_nequi,
         COALESCE(dp.abono_total, 0)                              AS abono_total,
-        COALESCE(dp.clientes_abonaron, 0)::int                   AS clientes_abonaron,
+        COALESCE(dac.clientes_activos, 0)::int                   AS clientes_abonaron,
         COALESCE(dvi.total_units, 0)::int                         AS visitas_totales,
         COALESCE(dc.canceladas, 0)::int                          AS clientes_no_llevaron,
         CASE
@@ -131,6 +142,7 @@ export async function GET(request) {
       LEFT JOIN daily_canceled       dc  ON dc.day = wd.day
       LEFT JOIN daily_manual         dm  ON dm.day = wd.day
       LEFT JOIN daily_target         dt  ON dt.day = wd.day
+      LEFT JOIN daily_active_customers dac ON dac.day = wd.day
       ORDER BY wd.day
       `,
       [weekStart, sellerId]

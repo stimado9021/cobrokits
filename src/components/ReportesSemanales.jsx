@@ -63,7 +63,7 @@ function moneyColored(val, zeroClass = "empty") {
 /* ─── Row definitions (matches the physical ledger) ───── */
 const ROWS = [
   { key: "suma_entrega",        label: "Suma Ventas",          type: "money",   editable: false, desc: "Ventas nuevas dejadas en crédito" },
-  { key: "abono_total",         label: "Abn (Abonaron)",       type: "money",   editable: false, desc: "Total recibido en abonos ese día (Efectivo + Nequi)" },
+  { key: "clientes_abonaron",   label: "Clientes",             type: "number",  editable: false, desc: "Clientes únicos que compraron o abonaron hoy" },
   { key: "clientes_no_llevaron",label: "CNL (Canceladas)",     type: "number",  editable: false, desc: "Clientes que pagaron todo y su saldo quedó en 0 ese día" },
   { key: "visitas_totales",     label: "Unid/Vendidas",         type: "number",  editable: false, desc: "Total de unidades vendidas (suma de cantidades)" },
   { key: "inversion_dia",       label: "Costo inicial",        type: "money",   editable: false, desc: "Costo de inversion de los productos entregados" },
@@ -256,7 +256,7 @@ export function ReportesSemanales({ activeSellerId = "", activeSellerName = "Tod
       const pdfCols = [
         { key: "day", label: "FECHA", type: "label" },
         { key: "suma_entrega", label: "SUMA VENTAS", type: "money" },
-        { key: "abono_total", label: "ABN", type: "money" },
+        { key: "clientes_abonaron", label: "CLIENTES", type: "number" },
         { key: "clientes_no_llevaron", label: "CNL", type: "number" },
         { key: "visitas_totales", label: "UNID/VENDIDAS", type: "number" },
         { key: "inversion_dia", label: "COSTO INICIAL", type: "money" },
