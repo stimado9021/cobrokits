@@ -109,6 +109,18 @@ export async function GET(request) {
           AND ($2::uuid IS NULL OR cv.seller_id = $2::uuid)
           AND (cv.payment_amount > 0 OR cv.new_products_total > 0)
         GROUP BY (cv.visit_date AT TIME ZONE 'America/Bogota')::date
+      ),
+      -- Daily sale value from daily_seller_stock (sold * sale_price)
+      daily_sale_value AS (
+        SELECT
+          dss.stock_date AS day,
+          SUM(dss.quantity_sold * p.sale_price) AS costo_cliente
+        FROM cobrokits.daily_seller_stock dss
+        JOIN cobrokits.products p ON p.id = dss.product_id
+        WHERE dss.stock_date BETWEEN $1::date AND ($1::date + interval '6 days')
+          AND ($2::uuid IS NULL OR dss.seller_id = $2::uuid)
+          AND dss.quantity_sold > 0
+        GROUP BY dss.stock_date
       )
       SELECT
         wd.day::text                                              AS day,
@@ -125,6 +137,7 @@ export async function GET(request) {
         END::int                                                  AS efectividad_pct,
         COALESCE(dvi.suma_entrega, 0)                            AS suma_entrega,
         COALESCE(dvi.inversion_dia, 0)                           AS inversion_dia,
+        COALESCE(dsv.costo_cliente, 0)                           AS costo_cliente,
         COALESCE(dm.gasto, 0)                                    AS gasto,
         COALESCE(dm.cnt_notes, '')                               AS cnt_notes,
         -- Dinero a entregar = Abono - Gasto
@@ -143,6 +156,7 @@ export async function GET(request) {
       LEFT JOIN daily_manual         dm  ON dm.day = wd.day
       LEFT JOIN daily_target         dt  ON dt.day = wd.day
       LEFT JOIN daily_active_customers dac ON dac.day = wd.day
+      LEFT JOIN daily_sale_value     dsv ON dsv.day = wd.day
       ORDER BY wd.day
       `,
       [weekStart, sellerId]
