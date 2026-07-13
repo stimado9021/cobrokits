@@ -68,6 +68,6 @@ export async function POST(request) {
 
     return fail(new Error('action debe ser "deliver", "close_day" o "auto_close"'), 400);
   } catch (error) {
-    return fail(error, 400);
+    return fail(error, 500);
   }
 }

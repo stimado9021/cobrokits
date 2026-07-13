@@ -150,8 +150,8 @@ export function Configuracion({ createSeller, createProduct, sellers, products, 
             ) : products.map(p => (
               <tr key={p.id}>
                 <td>{p.name}</td>
-                <td>${Number(p.investment_cost).toLocaleString()}</td>
-                <td>${Number(p.sale_price).toLocaleString()}</td>
+                <td>{new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 }).format(p.investment_cost)}</td>
+                <td>{new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 }).format(p.sale_price)}</td>
                 <td>
                   <button type="button" onClick={() => setEditingProduct(p)} style={{background: 'none', border: 'none', cursor: 'pointer', color: 'var(--brand)', marginRight: '10px'}} title="Editar" disabled={isSubmitting}>
                     <Edit2 size={16} />
@@ -172,13 +172,15 @@ export function Configuracion({ createSeller, createProduct, sellers, products, 
             className="field"
             onSubmit={async (e) => {
               e.preventDefault();
-              const form = new FormData(e.currentTarget);
-              await updateSeller(editingSeller.id, {
-                name: form.get('name'),
-                phone: form.get('phone'),
-                status: form.get('status')
-              });
-              setEditingSeller(null);
+              try {
+                const form = new FormData(e.currentTarget);
+                await updateSeller(editingSeller.id, {
+                  name: form.get('name'),
+                  phone: form.get('phone'),
+                  status: form.get('status')
+                });
+                setEditingSeller(null);
+              } catch { /* notice handled by parent */ }
             }}
           >
             <input name="name" defaultValue={editingSeller.name} placeholder="Nombre" required />
@@ -201,13 +203,15 @@ export function Configuracion({ createSeller, createProduct, sellers, products, 
             className="field"
             onSubmit={async (e) => {
               e.preventDefault();
-              const form = new FormData(e.currentTarget);
-              await updateProduct(editingProduct.id, {
-                name: form.get('name'),
-                investment_cost: form.get('investment_cost'),
-                sale_price: form.get('sale_price')
-              });
-              setEditingProduct(null);
+              try {
+                const form = new FormData(e.currentTarget);
+                await updateProduct(editingProduct.id, {
+                  name: form.get('name'),
+                  investment_cost: form.get('investment_cost'),
+                  sale_price: form.get('sale_price')
+                });
+                setEditingProduct(null);
+              } catch { /* notice handled by parent */ }
             }}
           >
             <input name="name" defaultValue={editingProduct.name} placeholder="Nombre" required />

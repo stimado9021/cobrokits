@@ -77,7 +77,8 @@ export async function GET(request) {
         SELECT
           entry_date AS day,
           gasto,
-          cnt_notes
+          cnt_notes,
+          entregado
         FROM cobrokits.weekly_manual_entries
         WHERE entry_date BETWEEN $1::date AND ($1::date + interval '6 days')
       ),
@@ -110,6 +111,40 @@ export async function GET(request) {
           AND (cv.payment_amount > 0 OR cv.new_products_total > 0)
         GROUP BY (cv.visit_date AT TIME ZONE 'America/Bogota')::date
       ),
+      -- Saldo anterior: deuda reconstruida hace 7 días de los clientes de ESA ruta (visit_day = DOW del día)
+      -- Se particiona por ruta: cada día suma solo la deuda de sus propios clientes.
+      -- balance(ref) = deuda_actual_ruta - crédito_desde_ref_ruta + abonos_desde_ref_ruta
+      daily_saldo_anterior AS (
+        SELECT
+          wd.day,
+          EXTRACT(DOW FROM wd.day)::int AS dow,
+          COALESCE((
+            SELECT SUM(c.current_balance)
+            FROM cobrokits.customers c
+            WHERE c.is_active = true
+              AND c.visit_day = EXTRACT(DOW FROM wd.day)::int
+              AND ($2::uuid IS NULL OR c.seller_id = $2::uuid)
+          ), 0) AS total_current,
+          COALESCE((
+            SELECT SUM(cv.new_products_total)
+            FROM cobrokits.customer_visits cv
+            JOIN cobrokits.customers c ON c.id = cv.customer_id
+            WHERE c.is_active = true
+              AND c.visit_day = EXTRACT(DOW FROM wd.day)::int
+              AND (cv.visit_date AT TIME ZONE 'America/Bogota')::date > (wd.day - interval '7 days')::date
+              AND ($2::uuid IS NULL OR c.seller_id = $2::uuid)
+          ), 0) AS credit_since,
+          COALESCE((
+            SELECT SUM(p.amount)
+            FROM cobrokits.payments p
+            JOIN cobrokits.customers c ON c.id = p.customer_id
+            WHERE c.is_active = true
+              AND c.visit_day = EXTRACT(DOW FROM wd.day)::int
+              AND (p.paid_at AT TIME ZONE 'America/Bogota')::date > (wd.day - interval '7 days')::date
+              AND ($2::uuid IS NULL OR c.seller_id = $2::uuid)
+          ), 0) AS payments_since
+        FROM week_days wd
+      ),
       -- Daily sale value from daily_seller_stock (sold * sale_price)
       daily_sale_value AS (
         SELECT
@@ -131,18 +166,21 @@ export async function GET(request) {
         COALESCE(dvi.total_units, 0)::int                         AS visitas_totales,
         COALESCE(dc.canceladas, 0)::int                          AS clientes_no_llevaron,
         CASE
-          WHEN COALESCE(dt.target_amount, 0) > 0
-          THEN ROUND((COALESCE(dp.abono_total, 0) / dt.target_amount) * 100)
+          WHEN COALESCE(dvi.suma_entrega, 0) > 0
+          THEN ROUND(((COALESCE(dp.m1_efectivo, 0) + COALESCE(dp.m2_nequi, 0)) / dvi.suma_entrega) * 100)
           ELSE 0
         END::int                                                  AS efectividad_pct,
         COALESCE(dvi.suma_entrega, 0)                            AS suma_entrega,
+        COALESCE(dsa.total_current, 0)
+          - COALESCE(dsa.credit_since, 0)
+          + COALESCE(dsa.payments_since, 0)                        AS saldo_anterior,
         COALESCE(dvi.inversion_dia, 0)                           AS inversion_dia,
         COALESCE(dsv.costo_cliente, 0)                           AS costo_cliente,
         COALESCE(dm.gasto, 0)                                    AS gasto,
         COALESCE(dm.cnt_notes, '')                               AS cnt_notes,
-        -- Dinero a entregar = Abono - Gasto
-        COALESCE(dp.abono_total, 0)
-          - COALESCE(dm.gasto, 0)                                AS dinero_a_entregar,
+        -- Dinero a entregar = manual entry if provided, otherwise Abono - Gasto
+        COALESCE(dm.entregado, COALESCE(dp.abono_total, 0)
+          - COALESCE(dm.gasto, 0))                                AS dinero_a_entregar,
         -- Ganancia = Entrega - Inversión + Abono - Gasto
         COALESCE(dvi.suma_entrega, 0)
           - COALESCE(dvi.inversion_dia, 0)
@@ -157,6 +195,7 @@ export async function GET(request) {
       LEFT JOIN daily_target         dt  ON dt.day = wd.day
       LEFT JOIN daily_active_customers dac ON dac.day = wd.day
       LEFT JOIN daily_sale_value     dsv ON dsv.day = wd.day
+      LEFT JOIN daily_saldo_anterior  dsa ON dsa.day = wd.day
       ORDER BY wd.day
       `,
       [weekStart, sellerId]
@@ -187,22 +226,23 @@ export async function GET(request) {
 export async function PUT(request) {
   try {
     const body = await request.json();
-    const { date, gasto = 0, cnt_notes = "" } = body;
+    const { date, gasto = 0, cnt_notes = "", entregado } = body;
 
     if (!date) return fail(new Error("date requerido"), 400);
 
     const [entry] = await query(
       `
-      INSERT INTO cobrokits.weekly_manual_entries (entry_date, gasto, cnt_notes)
-      VALUES ($1::date, $2, $3)
+      INSERT INTO cobrokits.weekly_manual_entries (entry_date, gasto, cnt_notes, entregado)
+      VALUES ($1::date, $2, $3, $4)
       ON CONFLICT (entry_date)
       DO UPDATE SET
         gasto      = EXCLUDED.gasto,
         cnt_notes  = EXCLUDED.cnt_notes,
+        entregado  = EXCLUDED.entregado,
         updated_at = now()
-      RETURNING entry_date::text AS day, gasto, cnt_notes
+      RETURNING entry_date::text AS day, gasto, cnt_notes, entregado
       `,
-      [date, gasto, cnt_notes]
+      [date, gasto, cnt_notes, entregado ?? null]
     );
 
     return ok({ entry });

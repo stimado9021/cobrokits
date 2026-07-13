@@ -187,6 +187,7 @@ export function NuevoCliente({
                 address: form.get("address"),
                 phone: form.get("phone"),
                 notes: form.get("notes"),
+                visit_day: form.get("visit_day") !== "" ? form.get("visit_day") : null,
               });
               setEditingCustomer(null);
             }}

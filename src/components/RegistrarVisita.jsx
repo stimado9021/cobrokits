@@ -30,7 +30,9 @@ export function RegistrarVisita({
   setSelectedVisitCustomer,
 }) {
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Bogota" }).format(new Date());
-  const todayDow = new Date().getDay(); // 0=Domingo, 6=Sábado (zona horaria local, usaremos Colombia)
+  // Calcular día de la semana en Colombia (0=Domingo, 6=Sábado)
+  const colombiaDate = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Bogota" }));
+  const todayDow = colombiaDate.getDay();
   const [selectedDate, setSelectedDate] = useState(today);
 
   const sellerVisits = useMemo(

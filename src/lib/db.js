@@ -32,7 +32,7 @@ export function ok(data = {}, init = {}) {
   return Response.json({ success: true, ...data }, init);
 }
 
-export function fail(error, status = 400) {
+export function fail(error, status = 500) {
   const message = error instanceof Error ? error.message : String(error);
   return Response.json({ success: false, message }, { status });
 }

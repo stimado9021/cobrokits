@@ -341,7 +341,7 @@ export function Inventario() {
                   width: `${90 - n * 8}%`,
                   borderRadius: "6px",
                   background:
-                    "linear-gradient(90deg,#e5e7e6 25%,#f0f2f0 50%,#e5e7e6 75%)",
+                    "linear-gradient(90deg,#222 25%,#2d2d2d 50%,#222 75%)",
                   backgroundSize: "200% 100%",
                   animation: "shimmer 1.4s infinite",
                 }}

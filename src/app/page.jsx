@@ -55,6 +55,11 @@ export default function Home() {
     const days = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
     return days[dayNum] ?? "—";
   }
+
+  function hoyColombiaDow() {
+    const d = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Bogota" }));
+    return d.getDay();
+  }
   
   const [dashboard, setDashboard] = useState(null);
   const [sellers, setSellers] = useState([]);
@@ -90,11 +95,11 @@ export default function Home() {
       return;
     }
     
-    // Validate customer's visit day matches today
+    // Validate customer's visit day matches today (Colombia timezone)
     const customer = customers.find(c => c.id === customerId);
     if (customer) {
       const visitDay = customer.visit_day !== null && customer.visit_day !== undefined ? Number(customer.visit_day) : null;
-      const todayDow = new Date().getDay();
+      const todayDow = hoyColombiaDow();
       if (visitDay !== null && visitDay !== todayDow) {
         alert(`${customer.name} solo se visita los ${dayName(visitDay)}. Hoy es ${dayName(todayDow)}.`);
         return;
@@ -153,9 +158,6 @@ export default function Home() {
   async function loadAll() {
     setLoading(true);
     try {
-      // Auto-close any open daily stock from previous days
-      try { await api("/apis/daily-stock", { method: "POST", body: JSON.stringify({ action: "auto_close" }) }); } catch { /* ignore */ }
-
       const results = await Promise.allSettled([
         api("/apis/dashboard"),
         api("/apis/sellers"),
@@ -195,6 +197,11 @@ export default function Home() {
 
   useEffect(() => {
     loadAll();
+  }, []);
+
+  // Auto-close old daily stock once on mount (not on every reload)
+  useEffect(() => {
+    api("/apis/daily-stock", { method: "POST", body: JSON.stringify({ action: "auto_close" }) }).catch(() => {});
   }, []);
 
   async function createSeller(event) {

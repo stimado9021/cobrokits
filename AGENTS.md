@@ -93,9 +93,9 @@ export async function GET() { ... }
 - `auto_close_old_days()` closes all unclosed days before today
 
 ### Report Calculations
-- **% Efectividad** = `(abonos_del_dia / meta_de_cobro) * 100`
-- **Meta de cobro** = sum of `current_balance` for customers with `visit_day` = today
-- **Clientes** (column) = count of unique customers who bought or paid today
+- **% Efectividad** = `((efectivo + nequi) / cobros) * 100`, donde cobros = `suma_entrega`
+- **Meta de cobro** = (ya no se usa para % Efectividad)
+- **Cuentas** (columna, antes "Clientes") = conteo de clientes únicos que compraron o abonaron hoy
 - **D1/D2 columns** — Removed from UI but still in DB (`weekly_manual_entries`)
 - **Dinero a entregar** = `abono_total - gasto`
 - **Ganancia** = `suma_entrega - inversion_dia + abono_total - gasto`

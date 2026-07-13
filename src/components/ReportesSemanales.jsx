@@ -9,18 +9,19 @@ import {
 /* ─── Helpers ─────────────────────────────────────────── */
 const DAYS_ES = ["Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado", "Domingo"];
 
-function getWeekStart(date) {
-  const d = new Date(date);
-  const day = d.getDay();
+function getWeekStart() {
+  const todayStr = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Bogota" }).format(new Date());
+  const [y, m, d] = todayStr.split("-").map(Number);
+  const date = new Date(Date.UTC(y, m - 1, d, 12, 0, 0));
+  const day = date.getUTCDay();
   const diff = day === 0 ? -6 : 1 - day;
-  d.setDate(d.getDate() + diff);
-  d.setHours(0, 0, 0, 0);
-  return d;
+  date.setUTCDate(date.getUTCDate() + diff);
+  return date;
 }
 
 function addDays(date, n) {
   const d = new Date(date);
-  d.setDate(d.getDate() + n);
+  d.setUTCDate(d.getUTCDate() + n);
   return d;
 }
 
@@ -36,7 +37,7 @@ function formatDate(date) {
 
 function formatWeekRange(weekStart) {
   const end = addDays(weekStart, 6);
-  return `${formatDate(toISODate(weekStart))} – ${formatDate(toISODate(end))} · ${end.getFullYear()}`;
+  return `${formatDate(toISODate(weekStart))} – ${formatDate(toISODate(end))} · ${end.getUTCFullYear()}`;
 }
 
 function n(val) {
@@ -62,40 +63,47 @@ function moneyColored(val, zeroClass = "empty") {
 
 /* ─── Row definitions (matches the physical ledger) ───── */
 const ROWS = [
-  { key: "suma_entrega",        label: "Ventas",               type: "money",   editable: false, desc: "Ventas nuevas dejadas en crédito" },
-  { key: "clientes_abonaron",   label: "Clientes",             type: "number",  editable: false, desc: "Clientes únicos que compraron o abonaron hoy" },
+  { key: "suma_entrega",        label: "Cobros",               type: "money",   editable: false, desc: "Ventas nuevas dejadas en crédito" },
+  { key: "saldo_anterior",      label: "Saldo Ant.",           type: "money",   editable: false, desc: "Deuda total de los clientes al inicio de la semana (por definir)" },
+  { key: "clientes_abonaron",   label: "Cuentas",              type: "number",  editable: false, desc: "Clientes únicos que compraron o abonaron hoy" },
   { key: "clientes_no_llevaron",label: "CNL",                  type: "number",  editable: false, desc: "Clientes que pagaron todo y su saldo quedó en 0 ese día" },
   { key: "visitas_totales",     label: "Unid.",                type: "number",  editable: false, desc: "Total de unidades vendidas (suma de cantidades)" },
   { key: "inversion_dia",       label: "Costo",                type: "money",   editable: false, desc: "Costo de inversion de los productos entregados" },
   { key: "costo_cliente",       label: "Costo Cli.",           type: "money",   editable: false, desc: "Valor de venta de productos vendidos (cantidad * PVP)" },
-  { key: "efectividad_pct",     label: "% Efect.",             type: "percent", editable: false, desc: "Abonos del día / Meta de cobro del día * 100" },
+  { key: "efectividad_pct",     label: "% Efect.",             type: "percent", editable: false, desc: "(Efectivo + Nequi) / Cobros * 100" },
   { key: "m1_efectivo",         label: "Efectivo",             type: "money",   editable: false, desc: "Recaudo en efectivo" },
   { key: "m2_nequi",            label: "Nequi",                type: "money",   editable: false, desc: "Recaudo por Nequi" },
+  { key: "total_recaudo",       label: "Total",                type: "money",   editable: false, desc: "Efectivo + Nequi", highlight: "computed" },
+  { key: "entrega",             label: "Entrega",              type: "money",   editable: false, desc: "(Saldo Ant. + Cobros) - Total (Efectivo + Nequi)", highlight: "computed" },
   { key: "gasto",               label: "Gasto",                type: "money",   editable: true,  desc: "Gasolina, almuerzo, viáticos…" },
-  { key: "dinero_a_entregar",   label: "A entregar",           type: "money",   editable: false, desc: "Abono – Gasto", highlight: "computed" },
-  { key: "cnt_notes",           label: "Novedades",            type: "text",    editable: true,  desc: "Observaciones del día" },
+  { key: "d_merca",             label: "D/Merca",              type: "money",   editable: false, desc: "(Entrega + Total) - Costo Cli. - Cobros", highlight: "computed" },
+  { key: "d_dinero",            label: "D/Dinero",             type: "money",   editable: false, desc: "Efectivo + Gastos - Total", highlight: "computed" },
+  { key: "dinero_a_entregar",   label: "$",                    type: "money",   editable: true,  desc: "Dinero que entrega el vendedor manualmente" },
   { key: "ganancia",            label: "Ganancia",             type: "money",   editable: false, desc: "Entrega – Inversión + Abono – Gasto", highlight: "profit" },
 ];
 
-const MANUAL_KEYS = ["gasto", "cnt_notes"];
+// (La columna "Novedades" fue removida temporalmente)
+
+const MANUAL_KEYS = ["gasto", "cnt_notes", "dinero_a_entregar"];
 
 /* ─── Empty day ───────────────────────────────────────── */
 function emptyDay(dateStr) {
   return {
     day: dateStr,
-    m1_efectivo: 0, m2_nequi: 0, abono_total: 0,
+    m1_efectivo: 0, m2_nequi: 0, abono_total: 0, entrega: 0, total_recaudo: 0,
     clientes_abonaron: 0, visitas_totales: 0, clientes_no_llevaron: 0,
     efectividad_pct: 0, suma_entrega: 0, inversion_dia: 0, costo_cliente: 0,
-    gasto: 0, cnt_notes: "",
+    saldo_anterior: 0,
+    gasto: 0, d_merca: 0, d_dinero: 0,
     dinero_a_entregar: 0, ganancia: 0,
   };
 }
 
 /* ─── Component ─────────────────────────────────────────── */
 export function ReportesSemanales({ activeSellerId = "", activeSellerName = "Todos los vendedores" }) {
-  const [weekStart, setWeekStart] = useState(() => getWeekStart(new Date()));
+  const [weekStart, setWeekStart] = useState(() => getWeekStart());
   const [days, setDays] = useState(() =>
-    Array.from({ length: 7 }, (_, i) => emptyDay(toISODate(addDays(getWeekStart(new Date()), i))))
+    Array.from({ length: 7 }, (_, i) => emptyDay(toISODate(addDays(getWeekStart(), i))))
   );
   const [loading, setLoading] = useState(false);
 
@@ -104,18 +112,32 @@ export function ReportesSemanales({ activeSellerId = "", activeSellerName = "Tod
   const [saving, setSaving] = useState(false);
   const [generatingPdf, setGeneratingPdf] = useState(false);
 
+  const abortRef = useRef(null);
+
   /* Load weekly data from API */
   const loadWeek = useCallback(async (ws) => {
+    if (abortRef.current) abortRef.current.abort();
+    const controller = new AbortController();
+    abortRef.current = controller;
+
     setLoading(true);
     try {
       const params = new URLSearchParams({ weekStart: toISODate(ws) });
       if (activeSellerId) params.set("sellerId", activeSellerId);
-      const res = await fetch(`/apis/weekly-report?${params.toString()}`);
+      const res = await fetch(`/apis/weekly-report?${params.toString()}`, { signal: controller.signal });
       const data = await res.json();
       if (data.success) {
-        setDays(data.days);
+        setDays(data.days.map(d => {
+          const totalRecaudo = n(d.m1_efectivo) + n(d.m2_nequi);
+          const entrega = n(d.saldo_anterior) + n(d.suma_entrega) - totalRecaudo;
+          const dMerca = (entrega + totalRecaudo) - n(d.costo_cliente) - n(d.suma_entrega);
+          const dDinero = n(d.m1_efectivo) + n(d.gasto) - totalRecaudo;
+          return { ...d, total_recaudo: totalRecaudo, entrega, d_merca: dMerca, d_dinero: dDinero };
+        }));
       }
-    } catch { /* silent */ }
+    } catch (err) {
+      if (err?.name !== "AbortError") console.error("loadWeek error:", err);
+    }
     finally { setLoading(false); }
   }, [activeSellerId]);
 
@@ -140,15 +162,22 @@ export function ReportesSemanales({ activeSellerId = "", activeSellerName = "Tod
     if (!dayData) return;
 
     // Optimistic update
-    setDays(prev => prev.map((d, i) => i === dayIdx ? { ...d, [key]: key === "cnt_notes" ? value : n(value) } : d));
+    setDays(prev => prev.map((d, i) => i === dayIdx
+      ? { ...d, [key]: key === "cnt_notes" ? value : n(value) }
+      : d));
     setEditing(null);
+
+    const updatedGasto = key === "gasto" ? n(value) : n(dayData.gasto);
+    const updatedNotes = key === "cnt_notes" ? value : dayData.cnt_notes;
+    const updatedEntregado = key === "dinero_a_entregar" ? n(value) : n(dayData.dinero_a_entregar);
 
     setSaving(true);
     try {
       const payload = {
         date: dayData.day,
-        gasto: key === "gasto" ? n(value) : n(dayData.gasto),
-        cnt_notes: key === "cnt_notes" ? value : (dayData.cnt_notes || ""),
+        gasto: n(updatedGasto),
+        cnt_notes: updatedNotes || "",
+        entregado: updatedEntregado,
       };
       const res = await fetch("/apis/weekly-report", {
         method: "PUT",
@@ -222,6 +251,11 @@ export function ReportesSemanales({ activeSellerId = "", activeSellerName = "Tod
     if (row.type === "text") return "–";
     if (row.type === "number") return n(val) || "–";
     if (row.type === "percent") return n(val) ? `${Math.round(n(val) / 7)}%` : "–";
+    // Saldo anterior no es aditivo: el Total muestra el saldo con el que arrancó la semana (lunes).
+    if (row.key === "saldo_anterior") {
+      const opening = days[0]?.[row.key];
+      return <span className={n(opening) > 0 ? "positive" : "empty"}>{money(opening)}</span>;
+    }
     if (row.key === "ganancia") {
       const v = n(val);
       return <strong className={v > 0 ? "gain-positive" : v < 0 ? "gain-negative" : "empty"}>{money(val)}</strong>;
@@ -256,8 +290,9 @@ export function ReportesSemanales({ activeSellerId = "", activeSellerName = "Tod
       // Columnas visibles en el PDF
       const pdfCols = [
         { key: "day", label: "FECHA", type: "label" },
-        { key: "suma_entrega", label: "VENTAS", type: "money" },
-        { key: "clientes_abonaron", label: "CLIENTES", type: "number" },
+        { key: "suma_entrega", label: "COBROS", type: "money" },
+        { key: "saldo_anterior", label: "SALDO ANT.", type: "money" },
+        { key: "clientes_abonaron", label: "CUENTAS", type: "number" },
         { key: "clientes_no_llevaron", label: "CNL", type: "number" },
         { key: "visitas_totales", label: "UNID.", type: "number" },
         { key: "inversion_dia", label: "COSTO", type: "money" },
@@ -265,8 +300,12 @@ export function ReportesSemanales({ activeSellerId = "", activeSellerName = "Tod
         { key: "efectividad_pct", label: "% EFECT.", type: "percent" },
         { key: "m1_efectivo", label: "EFECTIVO", type: "money" },
         { key: "m2_nequi", label: "NEQUI", type: "money" },
+        { key: "total_recaudo", label: "TOTAL", type: "money" },
+        { key: "entrega", label: "ENTREGA", type: "money" },
         { key: "gasto", label: "GASTO", type: "money" },
-        { key: "dinero_a_entregar", label: "A ENTREGAR", type: "money" },
+        { key: "d_merca", label: "D/MERCA", type: "money" },
+        { key: "d_dinero", label: "D/DINERO", type: "money" },
+        { key: "dinero_a_entregar", label: "$", type: "money" },
         { key: "ganancia", label: "GANANCIA", type: "money" },
       ];
 
