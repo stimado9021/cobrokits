@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import {
   ChevronLeft, ChevronRight, Calendar,
-  RefreshCcw, FileDown
+  RefreshCcw, FileDown, FileSpreadsheet
 } from "lucide-react";
 
 /* ─── Helpers ─────────────────────────────────────────── */
@@ -61,25 +61,35 @@ function moneyColored(val, zeroClass = "empty") {
   return <span className={v > 0 ? "positive" : "negative"}>{fmt.format(v)}</span>;
 }
 
+function cellTitle(col, rawVal) {
+  const label = col.label;
+  const v = n(rawVal);
+  let valStr;
+  if (col.type === "percent") valStr = v ? `${v}%` : "–";
+  else if (col.type === "number") valStr = v || "–";
+  else valStr = v ? fmt.format(v) : "–";
+  return `${label}: ${valStr}\n${col.desc}`;
+}
+
 /* ─── Row definitions (matches the physical ledger) ───── */
 const ROWS = [
-  { key: "suma_entrega",        label: "Cobros",               type: "money",   editable: false, desc: "Ventas nuevas dejadas en crédito" },
-  { key: "saldo_anterior",      label: "Saldo Ant.",           type: "money",   editable: false, desc: "Deuda total de los clientes al inicio de la semana (por definir)" },
+  { key: "suma_entrega",        label: "Cobros",               type: "money",   editable: false, desc: "Ventas nuevas dejadas en crédito = Σ(line_sale_total)" },
+  { key: "saldo_anterior",      label: "Saldo Ant.",           type: "money",   editable: false, desc: "Deuda total de los clientes al inicio de la semana" },
   { key: "clientes_abonaron",   label: "Cuentas",              type: "number",  editable: false, desc: "Clientes únicos que compraron o abonaron hoy" },
-  { key: "clientes_no_llevaron",label: "CNL",                  type: "number",  editable: false, desc: "Clientes que pagaron todo y su saldo quedó en 0 ese día" },
-  { key: "visitas_totales",     label: "Unid.",                type: "number",  editable: false, desc: "Total de unidades vendidas (suma de cantidades)" },
-  { key: "inversion_dia",       label: "Costo",                type: "money",   editable: false, desc: "Costo de inversion de los productos entregados" },
-  { key: "costo_cliente",       label: "Costo Cli.",           type: "money",   editable: false, desc: "Valor de venta de productos vendidos (cantidad * PVP)" },
-  { key: "efectividad_pct",     label: "% Efect.",             type: "percent", editable: false, desc: "(Efectivo + Nequi) / Cobros * 100" },
-  { key: "m1_efectivo",         label: "Efectivo",             type: "money",   editable: false, desc: "Recaudo en efectivo" },
-  { key: "m2_nequi",            label: "Nequi",                type: "money",   editable: false, desc: "Recaudo por Nequi" },
+  { key: "clientes_no_llevaron",label: "CNL",                  type: "number",  editable: false, desc: "Clientes que cancelaron su saldo (nuevo saldo = 0)" },
+  { key: "visitas_totales",     label: "Unid.",                type: "number",  editable: false, desc: "Total unidades vendidas = Σ(cantidad)" },
+  { key: "inversion_dia",       label: "Costo",                type: "money",   editable: false, desc: "Costo de inversión = Σ(cantidad × costo_unitario)" },
+  { key: "costo_cliente",       label: "Costo Cli.",           type: "money",   editable: false, desc: "Valor de venta = Σ(cantidad × precio_venta)" },
+  { key: "efectividad_pct",     label: "% Efect.",             type: "percent", editable: false, desc: "(Efectivo + Nequi) ÷ Cobros × 100" },
+  { key: "m1_efectivo",         label: "Efectivo",             type: "money",   editable: false, desc: "Recaudo en efectivo = Σ(pagos método efectivo)" },
+  { key: "m2_nequi",            label: "Nequi",                type: "money",   editable: false, desc: "Recaudo por Nequi = Σ(pagos método nequi)" },
   { key: "total_recaudo",       label: "Total",                type: "money",   editable: false, desc: "Efectivo + Nequi", highlight: "computed" },
-  { key: "entrega",             label: "Entrega",              type: "money",   editable: false, desc: "(Saldo Ant. + Cobros) - Total (Efectivo + Nequi)", highlight: "computed" },
-  { key: "gasto",               label: "Gasto",                type: "money",   editable: true,  desc: "Gasolina, almuerzo, viáticos…" },
-  { key: "d_merca",             label: "D/Merca",              type: "money",   editable: false, desc: "(Entrega + Total) - Costo Cli. - Cobros", highlight: "computed" },
-  { key: "d_dinero",            label: "D/Dinero",             type: "money",   editable: false, desc: "Efectivo + Gastos - Total", highlight: "computed" },
-  { key: "dinero_a_entregar",   label: "$",                    type: "money",   editable: true,  desc: "Dinero que entrega el vendedor manualmente" },
-  { key: "ganancia",            label: "Ganancia",             type: "money",   editable: false, desc: "Entrega – Inversión + Abono – Gasto", highlight: "profit" },
+  { key: "entrega",             label: "Entrega",              type: "money",   editable: false, desc: "(Saldo Ant. + Cobros) − Total (Efectivo + Nequi)", highlight: "computed" },
+  { key: "gasto",               label: "Gasto",                type: "money",   editable: true,  desc: "Gasolina, almuerzo, viáticos… (lo ingresa el vendedor)" },
+  { key: "d_merca",             label: "D/Merca",              type: "money",   editable: false, desc: "(Entrega + Total) − Costo Cli. − Cobros", highlight: "computed" },
+  { key: "d_dinero",            label: "D/Dinero",             type: "money",   editable: false, desc: "Efectivo + Gastos − Total", highlight: "computed" },
+  { key: "dinero_a_entregar",   label: "$",                    type: "money",   editable: true,  desc: "Dinero que entrega el vendedor (lo ingresa el vendedor)" },
+  { key: "ganancia",            label: "Ganancia",             type: "money",   editable: false, desc: "Entrega − Inversión + Abono − Gasto", highlight: "profit" },
 ];
 
 // (La columna "Novedades" fue removida temporalmente)
@@ -111,6 +121,7 @@ export function ReportesSemanales({ activeSellerId = "", activeSellerName = "Tod
   const [editing, setEditing] = useState(null);
   const [saving, setSaving] = useState(false);
   const [generatingPdf, setGeneratingPdf] = useState(false);
+  const [generatingExcel, setGeneratingExcel] = useState(false);
 
   const abortRef = useRef(null);
 
@@ -220,47 +231,56 @@ export function ReportesSemanales({ activeSellerId = "", activeSellerName = "Tod
     }
 
     if (row.editable) {
+      const v = n(rawVal);
+      let valDisplay;
+      if (key === "cnt_notes") {
+        valDisplay = rawVal || <span className="wr-placeholder">…</span>;
+      } else {
+        valDisplay = v !== 0 ? money(rawVal) : <span className="wr-placeholder">–</span>;
+      }
+      const valStr = key === "cnt_notes" ? (rawVal || "…") : (v ? fmt.format(v) : "–");
+      const titleText = `${row.label}: ${valStr}\n${row.desc}\nClic para editar`;
       return (
         <span
           className="wr-editable-val"
           onClick={() => startEdit(dayIdx, key)}
-          title="Clic para editar"
+          title={titleText}
         >
-          {key === "cnt_notes"
-            ? (rawVal || <span className="wr-placeholder">…</span>)
-            : (n(rawVal) !== 0 ? money(rawVal) : <span className="wr-placeholder">–</span>)
-          }
+          {valDisplay}
         </span>
       );
     }
 
     // Read-only calculated cells
-    if (row.type === "number") return <span>{n(rawVal) || "–"}</span>;
-    if (row.type === "percent") return <span>{n(rawVal) ? `${n(rawVal)}%` : "–"}</span>;
+    const t = cellTitle(row, rawVal);
+    if (row.type === "number") return <span title={t}>{n(rawVal) || "–"}</span>;
+    if (row.type === "percent") return <span title={t}>{n(rawVal) ? `${n(rawVal)}%` : "–"}</span>;
     if (row.type === "money_signed") return moneyColored(rawVal);
     if (row.key === "ganancia") {
       const v = n(rawVal);
-      return <strong className={v > 0 ? "gain-positive" : v < 0 ? "gain-negative" : "empty"}>{money(rawVal)}</strong>;
+      return <strong className={v > 0 ? "gain-positive" : v < 0 ? "gain-negative" : "empty"} title={t}>{money(rawVal)}</strong>;
     }
-    return <span className={n(rawVal) > 0 ? "positive" : "empty"}>{money(rawVal)}</span>;
+    return <span className={n(rawVal) > 0 ? "positive" : "empty"} title={t}>{money(rawVal)}</span>;
   }
 
   /* Render total cell */
   function renderTotal(row) {
     const val = totals[row.key];
-    if (row.type === "text") return "–";
-    if (row.type === "number") return n(val) || "–";
-    if (row.type === "percent") return n(val) ? `${Math.round(n(val) / 7)}%` : "–";
     // Saldo anterior no es aditivo: el Total muestra el saldo con el que arrancó la semana (lunes).
     if (row.key === "saldo_anterior") {
       const opening = days[0]?.[row.key];
-      return <span className={n(opening) > 0 ? "positive" : "empty"}>{money(opening)}</span>;
+      const t = `Total Saldo Ant.: ${n(opening) ? fmt.format(opening) : "–"}\n${row.desc}`;
+      return <span className={n(opening) > 0 ? "positive" : "empty"} title={t}>{money(opening)}</span>;
     }
+    const t = `Total ${row.label}: ${n(val) ? fmt.format(val) : "–"}\n${row.desc}`;
+    if (row.type === "text") return "–";
+    if (row.type === "number") return <span title={t}>{n(val) || "–"}</span>;
+    if (row.type === "percent") return <span title={t}>{n(val) ? `${Math.round(n(val) / 7)}%` : "–"}</span>;
     if (row.key === "ganancia") {
       const v = n(val);
-      return <strong className={v > 0 ? "gain-positive" : v < 0 ? "gain-negative" : "empty"}>{money(val)}</strong>;
+      return <strong className={v > 0 ? "gain-positive" : v < 0 ? "gain-negative" : "empty"} title={t}>{money(val)}</strong>;
     }
-    return <span className={n(val) > 0 ? "positive" : "empty"}>{money(val)}</span>;
+    return <span className={n(val) > 0 ? "positive" : "empty"} title={t}>{money(val)}</span>;
   }
 
   function metricCellClass(row) {
@@ -399,6 +419,94 @@ export function ReportesSemanales({ activeSellerId = "", activeSellerName = "Tod
     }
   }
 
+  function generateExcel() {
+    if (generatingExcel || loading) return;
+    setGeneratingExcel(true);
+    try {
+      const excelCols = [
+        { key: "day", label: "FECHA", type: "label" },
+        ...ROWS,
+      ];
+
+      const weekEnd = addDays(weekStart, 6);
+      const weekLabel = `${formatDate(toISODate(weekStart))} – ${formatDate(toISODate(weekEnd))} · ${weekEnd.getFullYear()}`;
+
+      let html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+        <head><meta charset="UTF-8"><!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet><x:Name>Reporte Semanal</x:Name><x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions></x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]-->
+        <style>
+          table { border-collapse: collapse; font-family: Arial, sans-serif; font-size: 11px; }
+          th { background: #7c3aed; color: #fff; padding: 6px 8px; text-align: center; font-weight: bold; border: 1px solid #5b21b6; }
+          td { padding: 5px 8px; border: 1px solid #d1d5db; text-align: center; }
+          .label { text-align: left; font-weight: bold; }
+          .total { background: #7c3aed; color: #fff; font-weight: bold; }
+          .gain { color: #16a34a; }
+          .gain-neg { color: #dc2626; }
+        </style></head><body>
+        <h2 style="font-family:Arial;color:#7c3aed;">CobroKits - Reporte Semanal</h2>
+        <p style="font-family:Arial;font-size:12px;">${weekLabel} · Vendedor: ${activeSellerName}</p>
+        <table>`;
+
+      html += "<thead><tr>" + excelCols.map(c =>
+        `<th${c.type === 'label' ? ' style="text-align:left;"' : ''}>${c.label}</th>`
+      ).join("") + "</tr></thead><tbody>";
+
+      days.forEach((dayData, di) => {
+        const bg = di % 2 === 0 ? "#f9f9f9" : "#fff";
+        const dayLabel = `${DAYS_ES[di]} ${dayData?.day ? formatDate(dayData.day) : ""}`;
+        html += `<tr style="background:${bg};">`;
+        excelCols.forEach(col => {
+          const val = dayData?.[col.key];
+          let display = ""; let cls = "";
+          if (col.type === "label") { display = dayLabel; cls = "label"; }
+          else if (col.type === "percent") display = n(val) ? `${n(val)}%` : "–";
+          else if (col.type === "number") display = n(val) || "–";
+          else {
+            const v = n(val);
+            display = v ? `$${Number(v).toLocaleString("es-CO")}` : "–";
+            if (col.key === "ganancia") cls = v > 0 ? "gain" : v < 0 ? "gain-neg" : "";
+          }
+          html += `<td class="${cls}">${display}</td>`;
+        });
+        html += "</tr>";
+      });
+
+      html += `<tr style="background:#7c3aed; color:#fff; font-weight:bold;">`;
+      excelCols.forEach(col => {
+        let display = ""; let cls = "total";
+        if (col.type === "label") display = "TOTAL";
+        else if (col.type === "percent") {
+          const avg = n(totals[col.key]) ? `${Math.round(n(totals[col.key]) / 7)}%` : "–";
+          display = avg;
+        }
+        else if (col.type === "number") display = n(totals[col.key]) || "–";
+        else {
+          const val = col.key === "saldo_anterior" ? n(days[0]?.[col.key]) : n(totals[col.key]);
+          display = val ? `$${Number(val).toLocaleString("es-CO")}` : "–";
+        }
+        html += `<td class="${cls}">${display}</td>`;
+      });
+      html += "</tr>";
+
+      html += `</tbody></table>
+        <p style="font-family:Arial;font-size:10px;color:#999;margin-top:8px;">Generado por CobroKits · ${new Intl.DateTimeFormat("es-CO", { timeZone: "America/Bogota", year: "numeric", month: "long", day: "numeric" }).format(new Date())}</p>
+        </body></html>`;
+
+      const blob = new Blob([html], { type: "application/vnd.ms-excel" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `reporte-semanal-${activeSellerName}-${toISODate(weekStart)}.xls`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("Error generating Excel:", err);
+    } finally {
+      setGeneratingExcel(false);
+    }
+  }
+
   return (
     <div className="reportes-container">
       {/* Header */}
@@ -415,6 +523,9 @@ export function ReportesSemanales({ activeSellerId = "", activeSellerName = "Tod
           </button>
           <button className="iconButton" onClick={generatePdf} disabled={generatingPdf || loading} title="Descargar PDF">
             {generatingPdf ? <span className="spinner" /> : <FileDown size={16} />}
+          </button>
+          <button className="iconButton" onClick={generateExcel} disabled={generatingExcel || loading} title="Descargar Excel">
+            {generatingExcel ? <span className="spinner" /> : <FileSpreadsheet size={16} />}
           </button>
         </div>
         <div className="reportes-seller-name">

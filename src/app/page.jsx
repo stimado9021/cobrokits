@@ -28,6 +28,7 @@ import { EntregarInventario } from "../components/EntregarInventario";
 import { Inventario } from "../components/Inventario";
 import { Configuracion } from "../components/Configuracion";
 import { ReportesSemanales } from "../components/ReportesSemanales";
+import { ReporteDiario } from "../components/ReporteDiario";
 
 const money = new Intl.NumberFormat("es-CO", {
   style: "currency",
@@ -443,6 +444,10 @@ export default function Home() {
             <BarChart2 size={18} />
             {!sidebarCollapsed && <span>Reportes Semanales</span>}
           </button>
+          <button className={`navButton ${activeTab === 'venta-diaria' ? 'active' : ''}`} onClick={() => setActiveTab('venta-diaria')} title="Venta Diaria">
+            <ClipboardList size={18} />
+            {!sidebarCollapsed && <span>Venta Diaria</span>}
+          </button>
           <button className={`navButton ${activeTab === 'configuracion' ? 'active' : ''}`} onClick={() => setActiveTab('configuracion')} title="Configuración">
             <Settings size={18} />
             {!sidebarCollapsed && <span>Configuración</span>}
@@ -489,6 +494,7 @@ export default function Home() {
               {activeTab === 'clientes' && 'Gestión de Clientes'}
               {activeTab === 'inventario' && 'Inventario General'}
               {activeTab === 'reportes' && 'Reportes Semanales'}
+              {activeTab === 'venta-diaria' && 'Venta Diaria'}
               {activeTab === 'configuracion' && 'Configuración de Sistema'}
             </h1>
           </div>
@@ -573,6 +579,9 @@ export default function Home() {
         {activeTab === 'inventario' && <Inventario />}
         {activeTab === 'reportes' && (
           <ReportesSemanales activeSellerId={activeSellerId} activeSellerName={activeSellerName} />
+        )}
+        {activeTab === 'venta-diaria' && (
+          <ReporteDiario activeSellerId={activeSellerId} activeSellerName={activeSellerName} />
         )}
         {activeTab === 'configuracion' && 
           <Configuracion 

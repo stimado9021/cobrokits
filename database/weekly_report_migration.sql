@@ -11,6 +11,7 @@ CREATE TABLE IF NOT EXISTS cobrokits.weekly_manual_entries (
   d1          NUMERIC(14,2) NOT NULL DEFAULT 0,
   d2          NUMERIC(14,2) NOT NULL DEFAULT 0,
   cnt_notes   TEXT,
+  entregado   NUMERIC(14,2) NOT NULL DEFAULT 0,
   created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
   updated_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
   UNIQUE (entry_date)

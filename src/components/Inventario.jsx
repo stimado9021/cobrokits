@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { Plus, History, Package, FileDown } from "lucide-react";
+import { Plus, History, Package, FileDown, FileSpreadsheet } from "lucide-react";
 
 async function api(path, options) {
   const response = await fetch(path, {
@@ -65,7 +65,7 @@ function ProductRow({ product, onAdded }) {
           transition: "background 0.2s",
         }}
       >
-        <td style={{ textAlign: "left", fontWeight: 500 }}>
+        <td style={{ textAlign: "left", fontWeight: 500 }} title={product.name}>
           <Package
             size={14}
             style={{
@@ -77,7 +77,7 @@ function ProductRow({ product, onAdded }) {
           />
           {product.name}
         </td>
-        <td>
+        <td title={`Stock: ${product.quantity} unidades`}>
           <strong
             style={{
               fontSize: "1.05rem",
@@ -90,7 +90,7 @@ function ProductRow({ product, onAdded }) {
         <td>
           <button
             type="button"
-            title="Agregar stock"
+            title={`Agregar stock a ${product.name}`}
             onClick={() => setOpen((v) => !v)}
             style={{
               display: "inline-flex",
@@ -169,6 +169,7 @@ export function Inventario() {
   const [stock, setStock] = useState([]);
   const [loadingStock, setLoadingStock] = useState(true);
   const [generatingPdf, setGeneratingPdf] = useState(false);
+  const [generatingExcel, setGeneratingExcel] = useState(false);
 
   const [selectedProductId, setSelectedProductId] = useState(null);
   const [selectedProductName, setSelectedProductName] = useState("todos los productos");
@@ -300,6 +301,59 @@ export function Inventario() {
     }
   }
 
+  function generateExcel() {
+    if (generatingExcel || stock.length === 0) return;
+    setGeneratingExcel(true);
+    try {
+      const today = new Intl.DateTimeFormat("es-CO", {
+        timeZone: "America/Bogota",
+        year: "numeric", month: "long", day: "numeric",
+      }).format(new Date());
+
+      const totalUnits = stock.reduce((s, p) => s + Number(p.quantity), 0);
+
+      let html = `<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+        <head><meta charset="UTF-8"><!--[if gte mso 9]><xml><x:ExcelWorkbook><x:ExcelWorksheets><x:ExcelWorksheet><x:Name>Inventario</x:Name><x:WorksheetOptions><x:DisplayGridlines/></x:WorksheetOptions></x:ExcelWorksheet></x:ExcelWorksheets></x:ExcelWorkbook></xml><![endif]-->
+        <style>
+          table { border-collapse: collapse; font-family: Arial, sans-serif; font-size: 11px; }
+          th { background: #7c3aed; color: #fff; padding: 6px 8px; text-align: center; font-weight: bold; border: 1px solid #5b21b6; }
+          td { padding: 5px 8px; border: 1px solid #d1d5db; text-align: center; }
+          .label { text-align: left; font-weight: bold; }
+          .total { background: #7c3aed; color: #fff; font-weight: bold; }
+          .stock-ok { color: #16a34a; font-weight: bold; }
+          .stock-zero { color: #dc2626; font-weight: bold; }
+        </style></head><body>
+        <h2 style="font-family:Arial;color:#7c3aed;">CobroKits - Inventario General</h2>
+        <p style="font-family:Arial;font-size:12px;">${today}</p>
+        <table>
+        <thead><tr><th style="text-align:left;">#</th><th style="text-align:left;">Producto</th><th>Stock</th></tr></thead><tbody>`;
+
+      stock.forEach((p, i) => {
+        const bg = i % 2 === 0 ? "#f9f9f9" : "#fff";
+        const cls = Number(p.quantity) > 0 ? "stock-ok" : "stock-zero";
+        html += `<tr style="background:${bg};"><td class="label">${i + 1}</td><td class="label">${p.name}</td><td class="${cls}">${p.quantity}</td></tr>`;
+      });
+
+      html += `</tbody><tfoot><tr style="background:#f3f0ff; border-top:2px solid #7c3aed;"><td class="total" colspan="2" style="text-align:left;">Total unidades</td><td class="total">${totalUnits}</td></tr></tfoot></table>
+        <p style="font-family:Arial;font-size:10px;color:#999;margin-top:8px;">Generado por CobroKits · ${today}</p>
+        </body></html>`;
+
+      const blob = new Blob([html], { type: "application/vnd.ms-excel" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `inventario-general-${new Date().toISOString().slice(0, 10)}.xls`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error("Error generating Excel:", err);
+    } finally {
+      setGeneratingExcel(false);
+    }
+  }
+
   return (
     <div
       style={{
@@ -324,6 +378,15 @@ export function Inventario() {
             style={{ opacity: generatingPdf ? 0.5 : 1 }}
           >
             {generatingPdf ? <span className="spinner" /> : <FileDown size={18} />}
+          </button>
+          <button
+            className="iconButton"
+            onClick={generateExcel}
+            disabled={generatingExcel || loadingStock || stock.length === 0}
+            title="Descargar Excel"
+            style={{ opacity: generatingExcel ? 0.5 : 1 }}
+          >
+            {generatingExcel ? <span className="spinner" /> : <FileSpreadsheet size={18} />}
           </button>
         </div>
         <p style={{ color: "var(--muted)", fontSize: "0.85rem", margin: "0 0 12px" }}>
@@ -352,9 +415,9 @@ export function Inventario() {
           <table className="dataTable">
             <thead>
               <tr>
-                <th style={{ textAlign: "left" }}>Producto</th>
-                <th>Stock</th>
-                <th>Agregar</th>
+                <th style={{ textAlign: "left" }} title="Nombre del producto">Producto</th>
+                <th title="Cantidad disponible en bodega">Stock</th>
+                <th title="Agregar unidades al stock">Agregar</th>
               </tr>
             </thead>
             <tbody>
@@ -439,25 +502,25 @@ export function Inventario() {
             <table className="dataTable">
               <thead>
                 <tr>
-                  <th>Fecha</th>
-                  <th>Producto</th>
-                  <th>Cantidad</th>
-                  <th>Notas</th>
+                  <th title="Fecha y hora del ingreso">Fecha</th>
+                  <th title="Nombre del producto ingresado">Producto</th>
+                  <th title="Cantidad de unidades ingresadas">Cantidad</th>
+                  <th title="Notas u observaciones del ingreso">Notas</th>
                 </tr>
               </thead>
               <tbody>
                 {history.map((entry) => (
                   <tr key={entry.id}>
-                    <td style={{ whiteSpace: "nowrap", fontSize: "0.85rem" }}>
+                    <td style={{ whiteSpace: "nowrap", fontSize: "0.85rem" }} title={`Ingreso: ${formatDate(entry.created_at)}`}>
                       {formatDate(entry.created_at)}
                     </td>
-                    <td>{entry.product_name}</td>
-                    <td>
+                    <td title={entry.product_name}>{entry.product_name}</td>
+                    <td title={`+${entry.quantity} unidades`}>
                       <strong style={{ color: "var(--brand)" }}>
                         +{entry.quantity}
                       </strong>
                     </td>
-                    <td style={{ color: "var(--muted)", fontSize: "0.85rem" }}>
+                    <td style={{ color: "var(--muted)", fontSize: "0.85rem" }} title={entry.notes || "Sin notas"}>
                       {entry.notes || "-"}
                     </td>
                   </tr>
