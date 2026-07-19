@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "db:setup": "node scripts/apply-cobrokits-schema.mjs",
-    "db:seed": "node scripts/seed-data.mjs"
+    "db:seed": "node scripts/seed-data.mjs",
+    "test": "node --test tests/*.mjs"
   },
   "dependencies": {
     "html2pdf.js": "^0.14.0",

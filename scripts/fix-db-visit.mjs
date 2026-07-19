@@ -1,19 +1,8 @@
-import { config } from "dotenv";
-import pg from "pg";
-config();
-const { Pool } = pg;
+import { getClient, close } from './db.mjs';
 
-const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
-  ssl: { rejectUnauthorized: false }
-});
-
-async function run() {
-  const client = await pool.connect();
-  try {
-    await client.query("SET search_path TO cobrokits, public;");
-    
-    const sql = `
+const client = await getClient();
+try {
+  const sql = `
 CREATE OR REPLACE FUNCTION register_customer_visit(
   p_customer_id UUID,
   p_seller_id UUID,
@@ -209,14 +198,12 @@ BEGIN
     v_new_balance;
 END;
 $$ LANGUAGE plpgsql;
-    `;
-    await client.query(sql);
-    console.log("register_customer_visit updated successfully!");
-  } catch(e) {
-    console.error(e);
-  } finally {
-    client.release();
-    pool.end();
-  }
+  `;
+  await client.query(sql);
+  console.log("register_customer_visit updated successfully!");
+} catch(e) {
+  console.error(e);
+} finally {
+  client.release();
+  await close();
 }
-run();

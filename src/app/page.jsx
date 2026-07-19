@@ -8,32 +8,35 @@ import {
   CreditCard,
   PackagePlus,
   RefreshCcw,
- Save,
+  Save,
   UserPlus,
   Home as HomeIcon,
   MapPin,
-  Users,
   Settings,
   Archive,
   Truck,
   BarChart2,
   PanelLeftClose,
-  PanelLeftOpen
+  PanelLeftOpen,
+  LogOut,
+  Users,
 } from "lucide-react";
 
 import { Dashboard } from "../components/Dashboard";
 import { RegistrarVisita } from "../components/RegistrarVisita";
-import { NuevoCliente } from "../components/NuevoCliente";
 import { EntregarInventario } from "../components/EntregarInventario";
 import { Inventario } from "../components/Inventario";
 import { Configuracion } from "../components/Configuracion";
 import { ReportesSemanales } from "../components/ReportesSemanales";
 import { ReporteDiario } from "../components/ReporteDiario";
+import { Login } from "../components/Login";
+import { VendedorVisita } from "../components/VendedorVisita";
+import { VendedorCliente } from "../components/VendedorCliente";
+import { VendedorAjustes } from "../components/VendedorAjustes";
+import { ErrorBoundary } from "../components/ErrorBoundary";
 
 const money = new Intl.NumberFormat("es-CO", {
-  style: "currency",
-  currency: "COP",
-  maximumFractionDigits: 0,
+  style: "currency", currency: "COP", maximumFractionDigits: 0,
 });
 
 function formatMoney(value) {
@@ -41,17 +44,25 @@ function formatMoney(value) {
 }
 
 async function api(path, options) {
-  const response = await fetch(path, {
-    headers: { "Content-Type": "application/json" },
-    ...options,
-  });
+  let response;
+  try {
+    response = await fetch(path, {
+      headers: { "Content-Type": "application/json" },
+      ...options,
+    });
+  } catch {
+    throw new Error("Error de conexión. Verifica tu internet e intenta de nuevo.");
+  }
   const data = await response.json();
-  if (!data.success) throw new Error(data.message || "Error de solicitud");
+  if (!data.success) throw new Error(data.message || "Error inesperado del servidor");
   return data;
 }
 
 export default function Home() {
-  // Helper to convert day number to name
+  const [session, setSession] = useState(null);
+  const [hydrated, setHydrated] = useState(false);
+  const [sellerTab, setSellerTab] = useState("visita");
+
   function dayName(dayNum) {
     const days = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
     return days[dayNum] ?? "—";
@@ -61,7 +72,7 @@ export default function Home() {
     const d = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Bogota" }));
     return d.getDay();
   }
-  
+
   const [dashboard, setDashboard] = useState(null);
   const [sellers, setSellers] = useState([]);
   const [customers, setCustomers] = useState([]);
@@ -72,7 +83,7 @@ export default function Home() {
   const [notice, setNotice] = useState("");
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  
+
   const [activeTab, setActiveTab] = useState("dashboard");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [visitFormKey, setVisitFormKey] = useState(0);
@@ -87,16 +98,12 @@ export default function Home() {
     if (!currentProductId || !currentQuantity || currentQuantity <= 0) return;
     const product = products.find(p => p.id === currentProductId);
     if (!product) return;
-    
-    // Get the selected customer from the select element
     const customerSelect = document.getElementById('visit-customer-select');
     const customerId = customerSelect?.value;
     if (!customerId) {
       alert("Seleccione un cliente primero");
       return;
     }
-    
-    // Validate customer's visit day matches today (Colombia timezone)
     const customer = customers.find(c => c.id === customerId);
     if (customer) {
       const visitDay = customer.visit_day !== null && customer.visit_day !== undefined ? Number(customer.visit_day) : null;
@@ -106,7 +113,6 @@ export default function Home() {
         return;
       }
     }
-    
     setVisitItems(prev => {
       const existing = prev.find(item => item.product_id === currentProductId);
       if (existing) {
@@ -130,7 +136,6 @@ export default function Home() {
     if (!currentDeliveryProductId || !currentDeliveryQuantity || currentDeliveryQuantity <= 0) return;
     const product = products.find(p => p.id === currentDeliveryProductId);
     if (!product) return;
-    
     setDeliveryItems(prev => {
       const existing = prev.find(item => item.product_id === currentDeliveryProductId);
       if (existing) {
@@ -177,14 +182,12 @@ export default function Home() {
       if (inventoryData?.inventory) setInventory(inventoryData.inventory);
       if (visitsData?.visits) setVisits(visitsData.visits);
 
-      const sellersList = sellersData?.sellers || [];
-      const visitsList = visitsData?.visits || [];
+      const sl = sellersData?.sellers || [];
+      const vl = visitsData?.visits || [];
       setActiveSellerId((current) => {
         if (current) return current;
-        const firstWithVisits = sellersList.find((s) =>
-          visitsList.some((v) => v.seller_id === s.id)
-        );
-        return firstWithVisits?.id || sellersList[0]?.id || "";
+        const firstWithVisits = sl.find((s) => vl.some((v) => v.seller_id === s.id));
+        return firstWithVisits?.id || sl[0]?.id || "";
       });
 
       const errors = results.filter(r => r.status === "rejected").map(r => r.reason?.message);
@@ -197,13 +200,22 @@ export default function Home() {
   }
 
   useEffect(() => {
-    loadAll();
+    const storedSession = localStorage.getItem("session");
+    if (storedSession) setSession(JSON.parse(storedSession));
+    const storedTab = localStorage.getItem("activeTab");
+    if (storedTab) setActiveTab(storedTab);
+    setHydrated(true);
   }, []);
 
-  // Auto-close old daily stock once on mount (not on every reload)
+  useEffect(() => { if (hydrated) loadAll(); }, [hydrated]);
+
   useEffect(() => {
     api("/apis/daily-stock", { method: "POST", body: JSON.stringify({ action: "auto_close" }) }).catch(() => {});
   }, []);
+
+  useEffect(() => {
+    if (session) localStorage.setItem("activeTab", activeTab);
+  }, [activeTab, session]);
 
   async function createSeller(event) {
     event.preventDefault();
@@ -217,6 +229,7 @@ export default function Home() {
         body: JSON.stringify({
           name: form.get("name"),
           phone: form.get("phone"),
+          password: form.get("password") || null,
         }),
       });
       formElement.reset();
@@ -269,6 +282,7 @@ export default function Home() {
           address: form.get("address"),
           phone: form.get("phone"),
           notes: form.get("notes"),
+          visit_day: form.get("visit_day") !== "" ? Number(form.get("visit_day")) : null,
         }),
       });
       formElement.reset();
@@ -303,9 +317,7 @@ export default function Home() {
     if (!confirm("¿Está seguro de que desea eliminar este registro?")) return;
     setIsSubmitting(true);
     try {
-      await api(`/apis/${type}?id=${id}`, {
-        method: "DELETE",
-      });
+      await api(`/apis/${type}?id=${id}`, { method: "DELETE" });
       setNotice("Eliminado exitosamente");
       await loadAll();
     } catch (e) {
@@ -322,15 +334,12 @@ export default function Home() {
   async function deliverDailyStock(event) {
     event.preventDefault();
     if (isSubmitting) return;
-
     const formElement = event.currentTarget;
     const form = new FormData(formElement);
-
     if (deliveryItems.length === 0) {
       setNotice("Agrega al menos un producto");
       return;
     }
-
     setIsSubmitting(true);
     try {
       const sellerId = form.get("seller_id");
@@ -338,13 +347,7 @@ export default function Home() {
       for (const item of deliveryItems) {
         await api("/apis/daily-stock", {
           method: "POST",
-          body: JSON.stringify({
-            action: "deliver",
-            seller_id: sellerId,
-            product_id: item.product_id,
-            quantity: Number(item.quantity),
-            stock_date,
-          }),
+          body: JSON.stringify({ action: "deliver", seller_id: sellerId, product_id: item.product_id, quantity: Number(item.quantity), stock_date }),
         });
       }
       formElement.reset();
@@ -367,7 +370,6 @@ export default function Home() {
     const form = new FormData(formElement);
     try {
       const hoy = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Bogota" }).format(new Date());
-
       await api("/apis/visits", {
         method: "POST",
         body: JSON.stringify({
@@ -385,7 +387,7 @@ export default function Home() {
       setCurrentProductId("");
       setCurrentQuantity("");
       setSelectedVisitCustomer("");
-      setVisitFormKey((key) => key + 1);
+      setVisitFormKey(k => k + 1);
       setNotice("Visita registrada");
       await loadAll();
     } catch (e) {
@@ -395,8 +397,144 @@ export default function Home() {
     }
   }
 
+  async function sellerCreateCustomer(data) {
+    setIsSubmitting(true);
+    try {
+      await api("/apis/customers", {
+        method: "POST",
+        body: JSON.stringify({
+          seller_id: session.sellerId,
+          ...data,
+        }),
+      });
+      setNotice("Cliente creado");
+      await loadAll();
+    } catch (e) {
+      throw e;
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
+  async function sellerRegisterVisit(data) {
+    setIsSubmitting(true);
+    try {
+      const hoy = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Bogota" }).format(new Date());
+      await api("/apis/visits", {
+        method: "POST",
+        body: JSON.stringify({ ...data, visit_date: hoy }),
+      });
+      setNotice("Visita registrada");
+      await loadAll();
+    } catch (e) {
+      throw e;
+    } finally {
+      setIsSubmitting(false);
+    }
+  }
+
   const totals = dashboard?.totals || {};
 
+  function doLogin(s) {
+    localStorage.setItem("session", JSON.stringify(s));
+    setSession(s);
+  }
+
+  function doLogout() {
+    localStorage.removeItem("session");
+    setSession(null);
+  }
+
+  // ====== HYDRATING / NOT READY ======
+  if (!hydrated) {
+    return (
+      <div className="login-screen">
+        <div className="spinner-lg" />
+      </div>
+    );
+  }
+
+  // ====== LOGIN SCREEN ======
+  if (!session) {
+    return <Login onLogin={doLogin} sellers={sellers} />;
+  }
+
+  // ====== SELLER VIEW (MOBILE) ======
+  if (session.role === "seller") {
+    const sellerCustomers = customers.filter(c => c.seller_id === session.sellerId);
+    const hoy = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Bogota" }).format(new Date());
+    const abonosHoy = visits
+      .filter(v => v.seller_id === session.sellerId && v.visit_date?.startsWith(hoy))
+      .reduce((s, v) => s + Number(v.payment_amount || 0), 0);
+    return (
+      <div className="seller-viewport">
+      <div className="seller-shell">
+        <header className="seller-header">
+          <div>
+            <strong>{session.sellerName}</strong>
+            <span>{sellerCustomers.length} clientes</span>
+            <span className="seller-abonos">Abonos: {formatMoney(abonosHoy)}</span>
+          </div>
+          <button className="seller-logout" onClick={doLogout}><LogOut size={20} /></button>
+        </header>
+
+        <div className="seller-content">
+          {sellerTab === "nuevo-cliente" && (
+            <VendedorCliente
+              seller={session}
+              onNewCustomer={sellerCreateCustomer}
+            />
+          )}
+          {sellerTab === "ajustes" && (
+            <VendedorAjustes seller={session} />
+          )}
+          {sellerTab === "visita" && (
+            <VendedorVisita
+              seller={session}
+              customers={customers}
+              products={products}
+              onVisit={sellerRegisterVisit}
+            />
+          )}
+          {sellerTab === "clientes" && (
+            <div className="seller-clients">
+              <button className="primary seller-submit" onClick={() => setSellerTab("nuevo-cliente")} style={{marginBottom:'10px'}}>
+                <UserPlus size={18} /> Nuevo Cliente
+              </button>
+              {sellerCustomers.length === 0 ? (
+                <p style={{textAlign:'center',padding:'40px 20px',color:'var(--muted)'}}>No tienes clientes asignados</p>
+              ) : (
+                sellerCustomers.map(c => (
+                  <div key={c.id} className="seller-client-card">
+                    <div className="seller-client-name">{c.name}</div>
+                    <div className="seller-client-info">{c.address} · {c.phone || 'Sin teléfono'}</div>
+                    <div className="seller-client-balance">
+                      Saldo: <strong>{formatMoney(c.current_balance)}</strong>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          )}
+        </div>
+
+        <nav className="seller-bottom-nav">
+          <button className={`seller-bottom-tab ${sellerTab === 'visita' ? 'active' : ''}`} onClick={() => setSellerTab('visita')}>
+            <MapPin size={22} /><span>Visita</span>
+          </button>
+          <button className={`seller-bottom-tab ${sellerTab === 'clientes' || sellerTab === 'nuevo-cliente' ? 'active' : ''}`} onClick={() => setSellerTab('clientes')}>
+            <Users size={22} /><span>Clientes</span>
+          </button>
+          <button className={`seller-bottom-tab ${sellerTab === 'ajustes' ? 'active' : ''}`} onClick={() => setSellerTab('ajustes')}>
+            <Settings size={22} /><span>Ajustes</span>
+          </button>
+        </nav>
+      </div>
+      </div>
+    );
+  }
+
+  // ====== ADMIN VIEW (FULL SYSTEM) ======
   return (
     <main className={`shell ${sidebarCollapsed ? "sidebar-collapsed" : ""}`}>
       <aside className="sidebar">
@@ -410,13 +548,14 @@ export default function Home() {
               </div>
             )}
           </div>
-          <button
-            className="sidebar-toggle"
-            onClick={() => setSidebarCollapsed((v) => !v)}
-            title={sidebarCollapsed ? "Expandir menú" : "Colapsar menú"}
-          >
-            {sidebarCollapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
-          </button>
+          <div style={{display:'flex', gap:'4px'}}>
+            <button className="sidebar-toggle" onClick={doLogout} title="Cerrar sesión">
+              <LogOut size={18} />
+            </button>
+            <button className="sidebar-toggle" onClick={() => setSidebarCollapsed(v => !v)} title={sidebarCollapsed ? "Expandir menú" : "Colapsar menú"}>
+              {sidebarCollapsed ? <PanelLeftOpen size={18} /> : <PanelLeftClose size={18} />}
+            </button>
+          </div>
         </div>
 
         <nav className="navMenu">
@@ -431,10 +570,6 @@ export default function Home() {
           <button className={`navButton ${activeTab === 'entregar-inventario' ? 'active' : ''}`} onClick={() => setActiveTab('entregar-inventario')} title="Entregar Inventario">
             <Truck size={18} />
             {!sidebarCollapsed && <span>Entregar Inventario</span>}
-          </button>
-          <button className={`navButton ${activeTab === 'clientes' ? 'active' : ''}`} onClick={() => setActiveTab('clientes')} title="Clientes">
-            <Users size={18} />
-            {!sidebarCollapsed && <span>Clientes</span>}
           </button>
           <button className={`navButton ${activeTab === 'inventario' ? 'active' : ''}`} onClick={() => setActiveTab('inventario')} title="Inventario General">
             <Archive size={18} />
@@ -452,6 +587,10 @@ export default function Home() {
             <Settings size={18} />
             {!sidebarCollapsed && <span>Configuración</span>}
           </button>
+          <button className="navButton" onClick={doLogout} title="Cerrar sesión" style={{borderTop:'1px solid var(--line)', marginTop:'4px', paddingTop:'12px'}}>
+            <LogOut size={18} />
+            {!sidebarCollapsed && <span>Salir</span>}
+          </button>
         </nav>
 
         <div style={{flex: 1}}></div>
@@ -460,19 +599,13 @@ export default function Home() {
           <>
             <label className="field">
               <span>Vendedor activo</span>
-              <select
-                value={activeSellerId}
-                onChange={(event) => setActiveSellerId(event.target.value)}
-              >
+              <select value={activeSellerId} onChange={(e) => setActiveSellerId(e.target.value)}>
                 <option value="">Todos</option>
                 {sellers.map((seller) => (
-                  <option key={seller.id} value={seller.id}>
-                    {seller.name}
-                  </option>
+                  <option key={seller.id} value={seller.id}>{seller.name}</option>
                 ))}
               </select>
             </label>
-
             <div className="sideStats">
               <span>Cartera</span>
               <strong>{formatMoney(totals.total_portfolio)}</strong>
@@ -491,7 +624,6 @@ export default function Home() {
               {activeTab === 'dashboard' && 'Operacion diaria'}
               {activeTab === 'registrar-visita' && 'Registrar Visita'}
               {activeTab === 'entregar-inventario' && 'Entregar Inventario'}
-              {activeTab === 'clientes' && 'Gestión de Clientes'}
               {activeTab === 'inventario' && 'Inventario General'}
               {activeTab === 'reportes' && 'Reportes Semanales'}
               {activeTab === 'venta-diaria' && 'Venta Diaria'}
@@ -505,99 +637,116 @@ export default function Home() {
 
         {notice ? <div className="notice">{notice}</div> : null}
 
-        {loading && (
-          <div className="loading-overlay">
-            <div className="spinner-lg" />
-            <span>Cargando datos…</span>
+        {loading ? (
+          <div className="skel-section">
+            {activeTab === 'dashboard' && (
+              <>
+                <div className="skel-metrics">
+                  {[1,2,3,4].map(i => <div key={i} className="skel skel-card" />)}
+                </div>
+                <div className="skel skel-table"><div className="skel skel-line-lg" style={{width:'40%',margin:'16px 0'}} /></div>
+                {[1,2,3].map(i => <div key={i} className="skel skel-row" />)}
+              </>
+            )}
+            {activeTab === 'registrar-visita' && (
+              <div className="workgrid">
+                <div className="panel" style={{gap:12}}>
+                  <div className="skel skel-line-lg" style={{width:'60%'}} />
+                  <div className="skel skel-line" />
+                  <div className="skel skel-line" />
+                  <div className="skel skel-line" />
+                  <div className="skel skel-line-lg" style={{width:'40%',marginTop:8}} />
+                </div>
+                <div className="panel" style={{gap:12}}>
+                  <div className="skel skel-line-lg" style={{width:'50%'}} />
+                  {[1,2,3].map(i => <div key={i} className="skel skel-row" />)}
+                </div>
+              </div>
+            )}
+            {activeTab === 'entregar-inventario' && (
+              <div className="workgrid">
+                <div className="panel" style={{gap:12}}>
+                  <div className="skel skel-line-lg" style={{width:'55%'}} />
+                  <div className="skel skel-line" />
+                  <div className="skel skel-line" />
+                  <div className="skel skel-line-lg" style={{width:'35%',marginTop:8}} />
+                </div>
+                <div className="panel" style={{gap:12}}>
+                  <div className="skel skel-line-lg" style={{width:'45%'}} />
+                  {[1,2,3,4].map(i => <div key={i} className="skel skel-row" />)}
+                </div>
+              </div>
+            )}
+            {(activeTab === 'inventario') && (
+              <div className="workgrid">
+                <div className="panel" style={{gap:12}}>
+                  <div className="skel skel-line-lg" style={{width:'50%'}} />
+                  {[1,2,3,4,5].map(i => <div key={i} className="skel skel-row" />)}
+                </div>
+                <div className="panel" style={{gap:12}}>
+                  <div className="skel skel-line-lg" style={{width:'40%'}} />
+                  {[1,2,3].map(i => <div key={i} className="skel skel-row" />)}
+                </div>
+              </div>
+            )}
+            {activeTab === 'reportes' && (
+              <div style={{padding:20,gap:12,display:'flex',flexDirection:'column'}}>
+                <div className="skel skel-line-lg" style={{width:'30%'}} />
+                {[1,2,3,4,5,6,7].map(i => <div key={i} className="skel skel-row" />)}
+              </div>
+            )}
+            {activeTab === 'venta-diaria' && (
+              <div style={{padding:20,gap:12,display:'flex',flexDirection:'column'}}>
+                <div className="skel skel-line-lg" style={{width:'35%'}} />
+                {[1,2,3,4].map(i => <div key={i} className="skel skel-row" />)}
+              </div>
+            )}
+            {activeTab === 'configuracion' && (
+              <div style={{padding:20,gap:12,display:'flex',flexDirection:'column'}}>
+                <div className="skel skel-line-lg" style={{width:'40%'}} />
+                {[1,2,3].map(i => <div key={i} className="skel skel-row" />)}
+              </div>
+            )}
           </div>
-        )}
-
+        ) : (
+          <>
         {activeTab === 'dashboard' && (
-          <Dashboard
-            dashboard={dashboard}
-            formatMoney={formatMoney}
-            loading={loading}
-            activeSellerId={activeSellerId}
-            activeSellerName={activeSellerName}
-          />
+          <ErrorBoundary key="dashboard" message="Error al cargar el dashboard">
+            <Dashboard dashboard={dashboard} formatMoney={formatMoney} loading={loading} activeSellerId={activeSellerId} activeSellerName={activeSellerName} />
+          </ErrorBoundary>
         )}
         {activeTab === 'registrar-visita' && 
-          <RegistrarVisita 
-            key={visitFormKey}
-            registerVisit={registerVisit}
-            sellers={sellers}
-            activeSellerId={activeSellerId}
-            setActiveSellerId={setActiveSellerId}
-            activeCustomers={activeCustomers}
-            formatMoney={formatMoney}
-            products={products}
-            currentProductId={currentProductId}
-            setCurrentProductId={setCurrentProductId}
-            currentQuantity={currentQuantity}
-            setCurrentQuantity={setCurrentQuantity}
-            addVisitItem={addVisitItem}
-            visitItems={visitItems}
-            removeVisitItem={removeVisitItem}
-            isSubmitting={isSubmitting}
-            loading={loading}
-            visits={visits}
-            activeSellerName={activeSellerName}
-            selectedVisitCustomer={selectedVisitCustomer}
-            setSelectedVisitCustomer={setSelectedVisitCustomer}
-          />
-        }
-        {activeTab === 'clientes' && 
-          <NuevoCliente 
-            createCustomer={createCustomer}
-            sellers={sellers}
-            activeSellerId={activeSellerId}
-            customers={customers}
-            updateCustomer={(id, data) => updateEntity('customers', id, data)}
-            deleteCustomer={(id) => deleteEntity('customers', id)}
-            isSubmitting={isSubmitting}
-            loading={loading}
-          />
+          <ErrorBoundary key="registrar-visita" message="Error al cargar el registro de visitas">
+          <RegistrarVisita key={visitFormKey} registerVisit={registerVisit} sellers={sellers} activeSellerId={activeSellerId} setActiveSellerId={setActiveSellerId} activeCustomers={activeCustomers} formatMoney={formatMoney} products={products} currentProductId={currentProductId} setCurrentProductId={setCurrentProductId} currentQuantity={currentQuantity} setCurrentQuantity={setCurrentQuantity} addVisitItem={addVisitItem} visitItems={visitItems} removeVisitItem={removeVisitItem} isSubmitting={isSubmitting} loading={loading} visits={visits} activeSellerName={activeSellerName} selectedVisitCustomer={selectedVisitCustomer} setSelectedVisitCustomer={setSelectedVisitCustomer} />
+          </ErrorBoundary>
         }
         {activeTab === 'entregar-inventario' && 
-          <EntregarInventario 
-            key={entregarFormKey}
-            deliverDailyStock={deliverDailyStock}
-            sellers={sellers}
-            activeSellerId={activeSellerId}
-            products={products}
-            currentDeliveryProductId={currentDeliveryProductId}
-            setCurrentDeliveryProductId={setCurrentDeliveryProductId}
-            currentDeliveryQuantity={currentDeliveryQuantity}
-            setCurrentDeliveryQuantity={setCurrentDeliveryQuantity}
-            addDeliveryItem={addDeliveryItem}
-            deliveryItems={deliveryItems}
-            removeDeliveryItem={removeDeliveryItem}
-            formatMoney={formatMoney}
-            isSubmitting={isSubmitting}
-          />
+          <ErrorBoundary key="entregar-inventario" message="Error al cargar la entrega de inventario">
+          <EntregarInventario key={entregarFormKey} deliverDailyStock={deliverDailyStock} sellers={sellers} activeSellerId={activeSellerId} products={products} currentDeliveryProductId={currentDeliveryProductId} setCurrentDeliveryProductId={setCurrentDeliveryProductId} currentDeliveryQuantity={currentDeliveryQuantity} setCurrentDeliveryQuantity={setCurrentDeliveryQuantity} addDeliveryItem={addDeliveryItem} deliveryItems={deliveryItems} removeDeliveryItem={removeDeliveryItem} formatMoney={formatMoney} isSubmitting={isSubmitting} />
+          </ErrorBoundary>
         }
-        {activeTab === 'inventario' && <Inventario />}
+        {activeTab === 'inventario' && 
+          <ErrorBoundary key="inventario" message="Error al cargar el inventario">
+            <Inventario />
+          </ErrorBoundary>
+        }
         {activeTab === 'reportes' && (
-          <ReportesSemanales activeSellerId={activeSellerId} activeSellerName={activeSellerName} />
+          <ErrorBoundary key="reportes" message="Error al cargar los reportes">
+            <ReportesSemanales activeSellerId={activeSellerId} activeSellerName={activeSellerName} />
+          </ErrorBoundary>
         )}
         {activeTab === 'venta-diaria' && (
-          <ReporteDiario activeSellerId={activeSellerId} activeSellerName={activeSellerName} />
+          <ErrorBoundary key="venta-diaria" message="Error al cargar la venta diaria">
+            <ReporteDiario activeSellerId={activeSellerId} activeSellerName={activeSellerName} />
+          </ErrorBoundary>
         )}
         {activeTab === 'configuracion' && 
-          <Configuracion 
-            createSeller={createSeller}
-            createProduct={createProduct}
-            sellers={sellers}
-            products={products}
-            updateSeller={(id, data) => updateEntity('sellers', id, data)}
-            deleteSeller={(id) => deleteEntity('sellers', id)}
-            updateProduct={(id, data) => updateEntity('products', id, data)}
-            deleteProduct={(id) => deleteEntity('products', id)}
-            isSubmitting={isSubmitting}
-            loading={loading}
-          />
+          <ErrorBoundary key="configuracion" message="Error al cargar la configuración">
+          <Configuracion createSeller={createSeller} createProduct={createProduct} sellers={sellers} products={products} updateSeller={(id, data) => updateEntity('sellers', id, data)} deleteSeller={(id) => deleteEntity('sellers', id)} updateProduct={(id, data) => updateEntity('products', id, data)} deleteProduct={(id) => deleteEntity('products', id)} createCustomer={createCustomer} customers={customers} activeSellerId={activeSellerId} updateCustomer={(id, data) => updateEntity('customers', id, data)} deleteCustomer={(id) => deleteEntity('customers', id)} isSubmitting={isSubmitting} loading={loading} />
+          </ErrorBoundary>
         }
-
+          </>
+        )}
       </section>
     </main>
   );

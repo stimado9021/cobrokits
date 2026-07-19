@@ -133,6 +133,12 @@ export function EntregarInventario({
     return dailyRows.reduce((sum, r) => sum + (r.sold * r.sale_price), 0);
   }, [dailyRows]);
 
+  function handleCloseDayClick() {
+    if (!selectedSellerId || closing) return;
+    if (!confirm("¿Estás seguro de cerrar el día? Los productos no vendidos se devolverán a bodega.")) return;
+    handleCloseDay();
+  }
+
   async function handleCloseDay() {
     if (!selectedSellerId || closing) return;
     setClosing(true);
@@ -251,7 +257,7 @@ export function EntregarInventario({
                   type="button"
                   className="primary"
                   style={{ padding: "4px 12px", fontSize: "13px" }}
-                  onClick={handleCloseDay}
+                  onClick={handleCloseDayClick}
                   disabled={closing}
                 >
                   {closing ? <span className="spinner" /> : <RotateCcw size={14} />}

@@ -1,5 +1,3 @@
-const fs = require('fs');
-
 async function api(path, options = {}) {
   const res = await fetch(`http://localhost:3000${path}`, {
     headers: { "Content-Type": "application/json" },
@@ -66,7 +64,7 @@ async function runTests() {
     })
   });
   console.log("Visit registered.");
-  
+
   console.log("ALL TESTS PASSED!");
 }
 
