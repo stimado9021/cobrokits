@@ -136,6 +136,7 @@ export function ReportesSemanales({ activeSellerId = "", activeSellerName = "Tod
       const params = new URLSearchParams({ weekStart: toISODate(ws) });
       if (activeSellerId) params.set("sellerId", activeSellerId);
       const res = await fetch(`/apis/weekly-report?${params.toString()}`, { signal: controller.signal });
+      if (controller.signal.aborted) return;
       const data = await res.json();
       if (data.success) {
         setDays(data.days.map(d => {
@@ -149,7 +150,7 @@ export function ReportesSemanales({ activeSellerId = "", activeSellerName = "Tod
     } catch (err) {
       if (err?.name !== "AbortError") console.error("loadWeek error:", err);
     }
-    finally { setLoading(false); }
+    finally { if (abortRef.current === controller) setLoading(false); }
   }, [activeSellerId]);
 
   useEffect(() => {

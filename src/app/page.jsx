@@ -20,7 +20,11 @@ import {
   PanelLeftOpen,
   LogOut,
   Users,
+  CloudOff,
+  Upload,
 } from "lucide-react";
+
+import { queueOperation, getPendingOperations, removeOperation } from "../lib/offline";
 
 import { Dashboard } from "../components/Dashboard";
 import { RegistrarVisita } from "../components/RegistrarVisita";
@@ -43,7 +47,7 @@ function formatMoney(value) {
   return money.format(Number(value || 0));
 }
 
-async function api(path, options) {
+async function api(path, options, { queueOffline = false } = {}) {
   let response;
   try {
     response = await fetch(path, {
@@ -51,6 +55,10 @@ async function api(path, options) {
       ...options,
     });
   } catch {
+    if (queueOffline && options?.method === "POST") {
+      await queueOperation({ url: path, body: options.body });
+      return { success: true, queued: true };
+    }
     throw new Error("Error de conexión. Verifica tu internet e intenta de nuevo.");
   }
   const data = await response.json();
@@ -62,6 +70,15 @@ export default function Home() {
   const [session, setSession] = useState(null);
   const [hydrated, setHydrated] = useState(false);
   const [sellerTab, setSellerTab] = useState("visita");
+  const [isOffline, setIsOffline] = useState(false);
+  const [pendingOps, setPendingOps] = useState(0);
+
+  async function refreshPendingCount() {
+    try {
+      const ops = await getPendingOperations();
+      setPendingOps(ops.length);
+    } catch {}
+  }
 
   function dayName(dayNum) {
     const days = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
@@ -208,6 +225,26 @@ export default function Home() {
   }, []);
 
   useEffect(() => { if (hydrated) loadAll(); }, [hydrated]);
+
+  useEffect(() => {
+    refreshPendingCount();
+    if ("serviceWorker" in navigator) {
+      navigator.serviceWorker.register("/sw.js").catch(() => {});
+    }
+    function handleOnline() { setIsOffline(false); }
+    function handleOffline() { setIsOffline(true); }
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+    setIsOffline(!navigator.onLine);
+    return () => {
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!isOffline && pendingOps > 0) syncPending().catch(() => {});
+  }, [isOffline]);
 
   useEffect(() => {
     api("/apis/daily-stock", { method: "POST", body: JSON.stringify({ action: "auto_close" }) }).catch(() => {});
@@ -370,7 +407,7 @@ export default function Home() {
     const form = new FormData(formElement);
     try {
       const hoy = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Bogota" }).format(new Date());
-      await api("/apis/visits", {
+      const result = await api("/apis/visits", {
         method: "POST",
         body: JSON.stringify({
           seller_id: form.get("seller_id"),
@@ -381,15 +418,20 @@ export default function Home() {
           notes: form.get("notes"),
           visit_date: hoy,
         }),
-      });
+      }, { queueOffline: true });
       formElement.reset();
       setVisitItems([]);
       setCurrentProductId("");
       setCurrentQuantity("");
       setSelectedVisitCustomer("");
       setVisitFormKey(k => k + 1);
-      setNotice("Visita registrada");
-      await loadAll();
+      if (result.queued) {
+        setNotice("Visita guardada offline — se sincronizará cuando haya conexión");
+        await refreshPendingCount();
+      } else {
+        setNotice("Visita registrada");
+      }
+      if (!result.queued) await loadAll();
     } catch (e) {
       setNotice(e.message);
     } finally {
@@ -397,17 +439,40 @@ export default function Home() {
     }
   }
 
+  async function syncPending() {
+    const ops = await getPendingOperations();
+    if (ops.length === 0) return;
+    setNotice(`Sincronizando ${ops.length} operación(es) pendiente(s)...`);
+    for (const op of ops) {
+      try {
+        const res = await fetch(op.url, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: op.body,
+        });
+        const data = await res.json();
+        if (data.success) await removeOperation(op.id);
+      } catch {
+        break;
+      }
+    }
+    await refreshPendingCount();
+    setNotice("Sincronización completada");
+    await loadAll();
+  }
+
   async function sellerCreateCustomer(data) {
     setIsSubmitting(true);
     try {
-      await api("/apis/customers", {
+      const result = await api("/apis/customers", {
         method: "POST",
         body: JSON.stringify({
           seller_id: session.sellerId,
           ...data,
         }),
-      });
+      }, { queueOffline: true });
       setNotice("Cliente creado");
+      if (result.queued) await refreshPendingCount();
       await loadAll();
     } catch (e) {
       throw e;
@@ -420,11 +485,12 @@ export default function Home() {
     setIsSubmitting(true);
     try {
       const hoy = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Bogota" }).format(new Date());
-      await api("/apis/visits", {
+      const result = await api("/apis/visits", {
         method: "POST",
         body: JSON.stringify({ ...data, visit_date: hoy }),
-      });
+      }, { queueOffline: true });
       setNotice("Visita registrada");
+      if (result.queued) await refreshPendingCount();
       await loadAll();
     } catch (e) {
       throw e;
@@ -466,6 +532,8 @@ export default function Home() {
     const abonosHoy = visits
       .filter(v => v.seller_id === session.sellerId && v.visit_date?.startsWith(hoy))
       .reduce((s, v) => s + Number(v.payment_amount || 0), 0);
+    const handleSync = async () => { try { await syncPending(); } catch {} };
+
     return (
       <div className="seller-viewport">
       <div className="seller-shell">
@@ -475,8 +543,26 @@ export default function Home() {
             <span>{sellerCustomers.length} clientes</span>
             <span className="seller-abonos">Abonos: {formatMoney(abonosHoy)}</span>
           </div>
-          <button className="seller-logout" onClick={doLogout}><LogOut size={20} /></button>
+          <div className="seller-header-actions">
+            {pendingOps > 0 && (
+              <button className="seller-sync-btn" onClick={handleSync} title="Sincronizar operaciones pendientes">
+                <Upload size={16} /> {pendingOps}
+              </button>
+            )}
+            {isOffline && <span className="seller-offline-badge"><CloudOff size={16} /></span>}
+            <button className="seller-logout" onClick={doLogout}><LogOut size={20} /></button>
+          </div>
         </header>
+        {isOffline && (
+          <div className="seller-offline-bar">
+            <CloudOff size={16} /> Sin conexión — los datos se guardarán localmente y se sincronizarán automáticamente
+          </div>
+        )}
+        {pendingOps > 0 && !isOffline && (
+          <div className="seller-sync-bar">
+            <Upload size={16} /> {pendingOps} operación(es) pendiente(s) — <button className="seller-sync-link" onClick={handleSync}>sincronizar ahora</button>
+          </div>
+        )}
 
         <div className="seller-content">
           {sellerTab === "nuevo-cliente" && (

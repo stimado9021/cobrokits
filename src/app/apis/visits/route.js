@@ -33,7 +33,7 @@ export async function GET(request) {
           AND ($2::uuid IS NULL OR cv.seller_id = $2::uuid)
           AND ($3::date IS NULL OR cv.visit_date::date >= $3::date)
           AND ($4::date IS NULL OR cv.visit_date::date < $4::date)
-        ORDER BY cv.visit_date DESC, cv.created_at DESC
+        ORDER BY cv.visit_date ASC, cv.created_at ASC
       `,
       [customerId, sellerId, dateFrom, dateTo],
     );

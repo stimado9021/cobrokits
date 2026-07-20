@@ -38,7 +38,7 @@ export function RegistrarVisita({
   const sellerVisits = useMemo(
     () => visits
       .filter((visit) => !activeSellerId || visit.seller_id === activeSellerId)
-      .sort((a, b) => new Date(b.visit_date) - new Date(a.visit_date)),
+      .sort((a, b) => new Date(a.visit_date) - new Date(b.visit_date)),
     [visits, activeSellerId]
   );
 
@@ -287,21 +287,30 @@ export function RegistrarVisita({
                   <td colSpan="5" className="empty-cell">Sin visitas en esta fecha</td>
                 </tr>
               ) : (
-                filteredVisits.map((visit) => (
-                  <tr key={visit.id}>
-                    <td>
-                      <strong>{visit.customer_name}</strong>
-                      <span>
-                        {new Date(visit.visit_date).toLocaleDateString("es-CO")} ·{" "}
-                        {visit.products_summary || "Sin producto nuevo"}
-                      </span>
-                    </td>
-                    <td className="money-cell">{formatMoney(visit.previous_balance)}</td>
-                    <td className="money-cell">{formatMoney(visit.sale_total)}</td>
-                    <td className="money-cell">{formatMoney(visit.payment_total)}</td>
-                    <td className="money-cell">{formatMoney(visit.new_balance)}</td>
+                <>
+                  {filteredVisits.map((visit) => (
+                    <tr key={visit.id}>
+                      <td>
+                        <strong>{visit.customer_name}</strong>
+                        <span>
+                          {new Date(visit.visit_date).toLocaleDateString("es-CO")} ·{" "}
+                          {visit.products_summary || "Sin producto nuevo"}
+                        </span>
+                      </td>
+                      <td className="money-cell">{formatMoney(visit.previous_balance)}</td>
+                      <td className="money-cell">{formatMoney(visit.sale_total)}</td>
+                      <td className="money-cell">{formatMoney(visit.payment_total)}</td>
+                      <td className="money-cell">{formatMoney(visit.new_balance)}</td>
+                    </tr>
+                  ))}
+                  <tr className="visitas-totals">
+                    <td><strong>Total</strong></td>
+                    <td className="money-cell">{formatMoney(filteredVisits.reduce((s, v) => s + Number(v.previous_balance || 0), 0))}</td>
+                    <td className="money-cell">{formatMoney(filteredVisits.reduce((s, v) => s + Number(v.sale_total || 0), 0))}</td>
+                    <td className="money-cell">{formatMoney(filteredVisits.reduce((s, v) => s + Number(v.payment_total || 0), 0))}</td>
+                    <td className="money-cell">{formatMoney(filteredVisits.reduce((s, v) => s + Number(v.new_balance || 0), 0))}</td>
                   </tr>
-                ))
+                </>
               )}
             </tbody>
           </table>

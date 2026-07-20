@@ -97,6 +97,7 @@ export async function GET() { ... }
 - **Meta de cobro** = (ya no se usa para % Efectividad)
 - **Cuentas** (columna, antes "Clientes") = conteo de clientes únicos que compraron o abonaron hoy
 - **D1/D2 columns** — Removed from UI but still in DB (`weekly_manual_entries`)
+- **Saldo Anterior** = `SUM(new_balance)` de las visitas del mismo día hace 7 días (mismo vendedor)
 - **Dinero a entregar** = `abono_total - gasto`
 - **Ganancia** = `suma_entrega - inversion_dia + abono_total - gasto`
 

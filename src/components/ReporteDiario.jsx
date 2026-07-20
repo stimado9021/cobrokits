@@ -111,6 +111,7 @@ export function ReporteDiario({ activeSellerId = "", activeSellerName = "Todos l
       const params = new URLSearchParams({ date });
       if (activeSellerId) params.set("sellerId", activeSellerId);
       const res = await fetch(`/apis/daily-report?${params.toString()}`, { signal: controller.signal });
+      if (controller.signal.aborted) return;
       const data = await res.json();
       if (data.success) {
         setSellers(data.sellers.map(s => {
@@ -128,7 +129,7 @@ export function ReporteDiario({ activeSellerId = "", activeSellerName = "Todos l
     } catch (err) {
       if (err?.name !== "AbortError") console.error("loadDay error:", err);
     }
-    finally { setLoading(false); }
+    finally { if (abortRef.current === controller) setLoading(false); }
   }, [activeSellerId]);
 
   useEffect(() => {

@@ -111,39 +111,14 @@ export async function GET(request) {
           AND (cv.payment_amount > 0 OR cv.new_products_total > 0)
         GROUP BY (cv.visit_date AT TIME ZONE 'America/Bogota')::date
       ),
-      -- Saldo anterior: deuda reconstruida hace 7 días de los clientes de ESA ruta (visit_day = DOW del día)
-      -- Se particiona por ruta: cada día suma solo la deuda de sus propios clientes.
-      -- balance(ref) = deuda_actual_ruta - crédito_desde_ref_ruta + abonos_desde_ref_ruta
+      -- Saldo anterior = new_balance de las visitas del mismo día hace 7 días
       daily_saldo_anterior AS (
         SELECT
-          wd.day,
-          EXTRACT(DOW FROM wd.day)::int AS dow,
-          COALESCE((
-            SELECT SUM(c.current_balance)
-            FROM cobrokits.customers c
-            WHERE c.is_active = true
-              AND c.visit_day = EXTRACT(DOW FROM wd.day)::int
-              AND ($2::uuid IS NULL OR c.seller_id = $2::uuid)
-          ), 0) AS total_current,
-          COALESCE((
-            SELECT SUM(cv.new_products_total)
-            FROM cobrokits.customer_visits cv
-            JOIN cobrokits.customers c ON c.id = cv.customer_id
-            WHERE c.is_active = true
-              AND c.visit_day = EXTRACT(DOW FROM wd.day)::int
-              AND (cv.visit_date AT TIME ZONE 'America/Bogota')::date > (wd.day - interval '7 days')::date
-              AND ($2::uuid IS NULL OR c.seller_id = $2::uuid)
-          ), 0) AS credit_since,
-          COALESCE((
-            SELECT SUM(p.amount)
-            FROM cobrokits.payments p
-            JOIN cobrokits.customers c ON c.id = p.customer_id
-            WHERE c.is_active = true
-              AND c.visit_day = EXTRACT(DOW FROM wd.day)::int
-              AND (p.paid_at AT TIME ZONE 'America/Bogota')::date > (wd.day - interval '7 days')::date
-              AND ($2::uuid IS NULL OR c.seller_id = $2::uuid)
-          ), 0) AS payments_since
-        FROM week_days wd
+          (cv.visit_date AT TIME ZONE 'America/Bogota')::date + interval '7 days' AS day,
+          COALESCE(SUM(cv.new_balance), 0) AS saldo_anterior
+        FROM cobrokits.customer_visits cv
+        WHERE ($2::uuid IS NULL OR cv.seller_id = $2::uuid)
+        GROUP BY (cv.visit_date AT TIME ZONE 'America/Bogota')::date
       ),
       -- Daily sale value from daily_seller_stock (sold * sale_price)
       daily_sale_value AS (
@@ -171,9 +146,8 @@ export async function GET(request) {
           ELSE 0
         END::int                                                  AS efectividad_pct,
         COALESCE(dvi.suma_entrega, 0)                            AS suma_entrega,
-        COALESCE(dsa.total_current, 0)
-          - COALESCE(dsa.credit_since, 0)
-          + COALESCE(dsa.payments_since, 0)                        AS saldo_anterior,
+        -- Saldo anterior = suma_entrega del mismo día hace 7 días
+        COALESCE(dsa.saldo_anterior, 0)              AS saldo_anterior,
         COALESCE(dvi.inversion_dia, 0)                           AS inversion_dia,
         COALESCE(dsv.costo_cliente, 0)                           AS costo_cliente,
         COALESCE(dm.gasto, 0)                                    AS gasto,

@@ -76,20 +76,14 @@ export async function GET(request) {
         FROM cobrokits.daily_seller_entries
         WHERE entry_date = $1::date
       ),
+      -- Saldo anterior = new_balance de las visitas del mismo día hace 7 días
       saldo_anterior AS (
         SELECT
-          c.seller_id,
-          COALESCE(SUM(c.current_balance), 0) AS total_current,
-          COALESCE(SUM(cv2.new_products_total), 0) AS credit_today,
-          COALESCE(SUM(p2.amount), 0) AS payments_today
-        FROM cobrokits.customers c
-        LEFT JOIN cobrokits.customer_visits cv2 ON cv2.customer_id = c.id
-          AND (cv2.visit_date AT TIME ZONE 'America/Bogota')::date = $1::date
-        LEFT JOIN cobrokits.payments p2 ON p2.customer_id = c.id
-          AND (p2.paid_at AT TIME ZONE 'America/Bogota')::date = $1::date
-        WHERE c.is_active = true
-          AND c.visit_day = EXTRACT(DOW FROM $1::date)::int
-        GROUP BY c.seller_id
+          cv.seller_id,
+          COALESCE(SUM(cv.new_balance), 0) AS saldo_anterior
+        FROM cobrokits.customer_visits cv
+        WHERE (cv.visit_date AT TIME ZONE 'America/Bogota')::date = ($1::date - interval '7 days')::date
+        GROUP BY cv.seller_id
       )
       SELECT
         sl.id AS seller_id,
@@ -107,7 +101,8 @@ export async function GET(request) {
           ELSE 0
         END::int AS efectividad_pct,
         COALESCE(dvi.suma_entrega, 0) AS suma_entrega,
-        COALESCE(sa.total_current, 0) - COALESCE(sa.credit_today, 0) + COALESCE(sa.payments_today, 0) AS saldo_anterior,
+        -- Saldo anterior = suma_entrega del mismo día hace 7 días
+        COALESCE(sa.saldo_anterior, 0) AS saldo_anterior,
         COALESCE(dvi.inversion_dia, 0) AS inversion_dia,
         COALESCE(dsv.costo_cliente, 0) AS costo_cliente,
         COALESCE(dm.gasto, 0) AS gasto,
