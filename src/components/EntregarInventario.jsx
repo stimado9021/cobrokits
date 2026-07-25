@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useCallback } from "react";
 import { PackagePlus, RotateCcw, Calendar } from "lucide-react";
 
 function hoyColombia() {
@@ -6,89 +6,88 @@ function hoyColombia() {
 }
 
 export function EntregarInventario({
-  deliverDailyStock,
   sellers,
   activeSellerId,
   products,
-  currentDeliveryProductId,
-  setCurrentDeliveryProductId,
-  currentDeliveryQuantity,
-  setCurrentDeliveryQuantity,
-  addDeliveryItem,
-  deliveryItems,
-  removeDeliveryItem,
   formatMoney,
-  isSubmitting,
+  onDelivered,
 }) {
   const [selectedSellerId, setSelectedSellerId] = useState(activeSellerId || "");
   const [dailyItems, setDailyItems] = useState([]);
   const [warehouseStock, setWarehouseStock] = useState([]);
   const [loading, setLoading] = useState(false);
   const [closing, setClosing] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [closeResult, setCloseResult] = useState(null);
   const todayDate = useMemo(() => hoyColombia(), []);
   const [viewDate, setViewDate] = useState(todayDate);
   const [availableDates, setAvailableDates] = useState([]);
 
+  // Delivery form state (local)
+  const [deliveryProductId, setDeliveryProductId] = useState("");
+  const [deliveryQuantity, setDeliveryQuantity] = useState("");
+  const [deliveryItems, setDeliveryItems] = useState([]);
+  const [deliveryError, setDeliveryError] = useState("");
+
   useEffect(() => {
     setSelectedSellerId(activeSellerId || "");
   }, [activeSellerId]);
 
-  // Load available dates for the seller
+  // Reset delivery form when seller changes
+  useEffect(() => {
+    setDeliveryItems([]);
+    setDeliveryProductId("");
+    setDeliveryQuantity("");
+    setDeliveryError("");
+    setCloseResult(null);
+  }, [selectedSellerId]);
+
+  // Clear closeResult when viewDate changes
+  useEffect(() => {
+    setCloseResult(null);
+  }, [viewDate]);
+
+  const busy = submitting || closing;
+
+  // ─── Load available dates (lightweight) ───────────
   useEffect(() => {
     if (!selectedSellerId) { setAvailableDates([]); return; }
-
     let cancelled = false;
-    async function loadDates() {
-      try {
-        const res = await fetch(`/apis/daily-stock?sellerId=${selectedSellerId}`);
-        const data = await res.json();
-        if (!cancelled && data.success) {
-          const dates = [...new Set(data.items.map(i => i.stock_date?.slice(0, 10)).filter(Boolean))].sort((a, b) => b.localeCompare(a));
-          setAvailableDates(dates);
-        }
-      } catch {
-        if (!cancelled) setAvailableDates([]);
-      }
-    }
-    loadDates();
+    fetch(`/apis/daily-stock?sellerId=${selectedSellerId}&action=dates`)
+      .then(r => r.json())
+      .then(data => {
+        if (!cancelled && data.success) setAvailableDates(data.dates || []);
+      })
+      .catch(() => { if (!cancelled) setAvailableDates([]); });
     return () => { cancelled = true; };
   }, [selectedSellerId]);
 
-  // Use todayDate for delivery, viewDate for display
-  const effectiveDate = viewDate;
+  // ─── Load warehouse stock ONCE per seller (not per date) ─────
+  useEffect(() => {
+    let cancelled = false;
+    fetch("/apis/general-stock")
+      .then(r => r.json())
+      .then(data => {
+        if (!cancelled && data.success) setWarehouseStock(data.inventory || []);
+      })
+      .catch(() => { if (!cancelled) setWarehouseStock([]); });
+    return () => { cancelled = true; };
+  }, []);
 
-  // Load warehouse stock and daily stock for the view date
+  // ─── Load daily stock for the selected date ───────
   useEffect(() => {
     if (!selectedSellerId) { setDailyItems([]); return; }
-
     let cancelled = false;
-
-    async function loadData() {
-      setLoading(true);
-      try {
-        const [wsRes, dsRes] = await Promise.all([
-          fetch("/apis/general-stock"),
-          fetch(`/apis/daily-stock?sellerId=${selectedSellerId}&stockDate=${effectiveDate}`),
-        ]);
-        const wsData = await wsRes.json();
-        const dsData = await dsRes.json();
-        if (!cancelled) {
-          if (wsData.success) setWarehouseStock(wsData.inventory || []);
-          if (dsData.success) setDailyItems(dsData.items || []);
-        }
-      } catch {
-        if (!cancelled) { setWarehouseStock([]); setDailyItems([]); }
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    }
-
-    loadData();
+    setLoading(true);
+    fetch(`/apis/daily-stock?sellerId=${selectedSellerId}&stockDate=${viewDate}`)
+      .then(r => r.json())
+      .then(data => {
+        if (!cancelled && data.success) setDailyItems(data.items || []);
+      })
+      .catch(() => { if (!cancelled) setDailyItems([]); })
+      .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [selectedSellerId, effectiveDate]);
-
-  const busy = isSubmitting || closing;
+  }, [selectedSellerId, viewDate]);
 
   const whMap = useMemo(() => {
     const map = {};
@@ -99,9 +98,18 @@ export function EntregarInventario({
   const isPastDay = viewDate < todayDate;
   const isToday = viewDate === todayDate;
 
-    const dailyRows = useMemo(() => {
-    const rowsByProduct = new Map();
+  // ─── Effective warehouse stock = on-hand minus queued items ────
+  const effectiveWhMap = useMemo(() => {
+    const map = { ...whMap };
+    deliveryItems.forEach(item => {
+      map[item.product_id] = Math.max(0, (map[item.product_id] || 0) - item.quantity);
+    });
+    return map;
+  }, [whMap, deliveryItems]);
 
+  // ─── Daily rows (deduplicated by product) ────────
+  const dailyRows = useMemo(() => {
+    const rowsByProduct = new Map();
     dailyItems.forEach((item) => {
       const delivered = Number(item.quantity_delivered);
       const sold = Number(item.quantity_sold);
@@ -116,23 +124,91 @@ export function EntregarInventario({
         is_closed: item.is_closed,
       });
     });
-
     let rows = Array.from(rowsByProduct.values()).sort((a, b) => a.product_name.localeCompare(b.product_name));
-    // Ocultar items cerrados en vista "Hoy"
-    if (isToday) {
-      rows = rows.filter(r => !r.is_closed);
-    }
+    if (isToday) rows = rows.filter(r => !r.is_closed);
     return rows;
   }, [dailyItems, isToday]);
 
-  const inversionVendido = useMemo(() => {
-    return dailyRows.reduce((sum, r) => sum + (r.sold * r.investment_cost), 0);
-  }, [dailyRows]);
+  const inversionVendido = useMemo(() => dailyRows.reduce((sum, r) => sum + (r.sold * r.investment_cost), 0), [dailyRows]);
+  const ventaVendido = useMemo(() => dailyRows.reduce((sum, r) => sum + (r.sold * r.sale_price), 0), [dailyRows]);
 
-  const ventaVendido = useMemo(() => {
-    return dailyRows.reduce((sum, r) => sum + (r.sold * r.sale_price), 0);
-  }, [dailyRows]);
+  // ─── Delivery form handlers ───────────────────────
+  function addDeliveryItem() {
+    if (!deliveryProductId || !deliveryQuantity) return;
+    const qty = Number(deliveryQuantity);
+    if (qty <= 0) return;
 
+    const available = effectiveWhMap[deliveryProductId] || 0;
+    if (qty > available) {
+      setDeliveryError(`Solo hay ${available} unidades en bodega`);
+      return;
+    }
+
+    const product = products.find(p => p.id === deliveryProductId);
+    if (!product) return;
+
+    setDeliveryItems(prev => {
+      const existing = prev.find(i => i.product_id === deliveryProductId);
+      if (existing) {
+        const newQty = existing.quantity + qty;
+        if (newQty > available) {
+          setDeliveryError(`Solo hay ${available} unidades en bodega`);
+          return prev;
+        }
+        return prev.map(i => i.product_id === deliveryProductId ? { ...i, quantity: newQty } : i);
+      }
+      return [...prev, { product_id: deliveryProductId, name: product.name, quantity: qty }];
+    });
+    setDeliveryProductId("");
+    setDeliveryQuantity("");
+    setDeliveryError("");
+  }
+
+  function removeDeliveryItem(productId) {
+    setDeliveryItems(prev => prev.filter(i => i.product_id !== productId));
+  }
+
+  async function handleDeliver(event) {
+    event.preventDefault();
+    if (submitting || !selectedSellerId || deliveryItems.length === 0) return;
+    setSubmitting(true);
+    setDeliveryError("");
+    try {
+      const res = await fetch("/apis/daily-stock", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "deliver_batch",
+          seller_id: selectedSellerId,
+          stock_date: todayDate,
+          items: deliveryItems.map(i => ({ product_id: i.product_id, quantity: i.quantity })),
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setDeliveryItems([]);
+        setDeliveryProductId("");
+        setDeliveryQuantity("");
+        // Reload daily stock for today
+        const dsRes = await fetch(`/apis/daily-stock?sellerId=${selectedSellerId}&stockDate=${todayDate}`);
+        const dsData = await dsRes.json();
+        if (dsData.success) setDailyItems(dsData.items || []);
+        // Reload available dates
+        const datesRes = await fetch(`/apis/daily-stock?sellerId=${selectedSellerId}&action=dates`);
+        const datesData = await datesRes.json();
+        if (datesData.success) setAvailableDates(datesData.dates || []);
+        if (onDelivered) onDelivered();
+      } else {
+        setDeliveryError(data.message || "Error al entregar");
+      }
+    } catch (e) {
+      setDeliveryError(e.message);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  // ─── Close day handler ────────────────────────────
   function handleCloseDayClick() {
     if (!selectedSellerId || closing) return;
     if (!confirm("¿Estás seguro de cerrar el día? Los productos no vendidos se devolverán a bodega.")) return;
@@ -147,14 +223,19 @@ export function EntregarInventario({
       const res = await fetch("/apis/daily-stock", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action: "close_day", seller_id: selectedSellerId, stock_date: todayDate }),
+        body: JSON.stringify({ action: "close_day", seller_id: selectedSellerId, stock_date: viewDate }),
       });
       const data = await res.json();
       if (data.success) {
         setCloseResult(data.closed);
-        const dsRes = await fetch(`/apis/daily-stock?sellerId=${selectedSellerId}&stockDate=${todayDate}`);
+        // Reload daily stock for the view date
+        const dsRes = await fetch(`/apis/daily-stock?sellerId=${selectedSellerId}&stockDate=${viewDate}`);
         const dsData = await dsRes.json();
         if (dsData.success) setDailyItems(dsData.items || []);
+        // Reload dates
+        const datesRes = await fetch(`/apis/daily-stock?sellerId=${selectedSellerId}&action=dates`);
+        const datesData = await datesRes.json();
+        if (datesData.success) setAvailableDates(datesData.dates || []);
       } else {
         setCloseResult({ error: data.message || "Error al cerrar día" });
       }
@@ -165,55 +246,54 @@ export function EntregarInventario({
     }
   }
 
+  const canCloseDay = !isPastDay && dailyRows.length > 0 && !dailyRows.every(r => r.is_closed);
+
   return (
     <section className="workgrid">
-      <form className="panel" onSubmit={deliverDailyStock}>
+      <form className="panel" onSubmit={handleDeliver}>
         <div className="panelHead">
           <h2>Entregar inventario diario</h2>
           <PackagePlus size={18} />
         </div>
         <select
-          name="seller_id"
           value={selectedSellerId}
-          onChange={(event) => setSelectedSellerId(event.target.value)}
+          onChange={(e) => setSelectedSellerId(e.target.value)}
           required
         >
           <option value="">Vendedor</option>
           {sellers.map((seller) => (
-            <option key={seller.id} value={seller.id}>
-              {seller.name}
-            </option>
+            <option key={seller.id} value={seller.id}>{seller.name}</option>
           ))}
         </select>
         <div className="row">
           <select
-            value={currentDeliveryProductId}
-            onChange={(event) => setCurrentDeliveryProductId(event.target.value)}
+            value={deliveryProductId}
+            onChange={(e) => { setDeliveryProductId(e.target.value); setDeliveryError(""); }}
           >
             <option value="">Producto</option>
             {products
-              .filter((product) => (whMap[product.id] ?? 0) > 0)
-              .map((product) => {
-                const whQty = whMap[product.id];
-                return (
-                  <option key={product.id} value={product.id}>
-                    {product.name} (bodega: {whQty} uds)
-                  </option>
-                );
-              })}
+              .filter((p) => (effectiveWhMap[p.id] ?? 0) > 0)
+              .map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name} (bodega: {effectiveWhMap[p.id]} uds)
+                </option>
+              ))}
           </select>
           <input
-            value={currentDeliveryQuantity}
-            onChange={(event) => setCurrentDeliveryQuantity(event.target.value)}
+            value={deliveryQuantity}
+            onChange={(e) => setDeliveryQuantity(e.target.value)}
             type="number"
-            min="0"
+            min="1"
             placeholder="Cant."
             style={{ width: "70px" }}
           />
-          <button type="button" className="iconButton" onClick={addDeliveryItem} title="Agregar" disabled={busy}>
+          <button type="button" className="iconButton" onClick={addDeliveryItem} title="Agregar" disabled={busy || !deliveryProductId}>
             <PackagePlus size={18} />
           </button>
         </div>
+        {deliveryError && (
+          <p style={{ fontSize: "12px", color: "var(--red)", margin: "4px 0" }}>{deliveryError}</p>
+        )}
         {deliveryItems.length > 0 && (
           <div className="pending-items">
             {deliveryItems.map((item) => (
@@ -224,9 +304,9 @@ export function EntregarInventario({
             ))}
           </div>
         )}
-        <button className="primary" type="submit" disabled={busy || !isToday}>
-          {busy ? <span className="spinner" /> : <PackagePlus size={17} />}
-          {busy ? "Entregando..." : "Entregar"}
+        <button className="primary" type="submit" disabled={busy || !isToday || deliveryItems.length === 0}>
+          {submitting ? <span className="spinner" /> : <PackagePlus size={17} />}
+          {submitting ? "Entregando..." : "Entregar"}
         </button>
       </form>
 
@@ -252,7 +332,7 @@ export function EntregarInventario({
                   </option>
                 ))}
               </select>
-              {isToday && dailyRows.length > 0 && !dailyRows.every(r => r.is_closed) && (
+              {canCloseDay && (
                 <button
                   type="button"
                   className="primary"
@@ -315,7 +395,7 @@ export function EntregarInventario({
               <tbody>
                 {dailyRows.map((item) => (
                   <tr key={item.product_id} style={{ opacity: item.is_closed ? 0.6 : 1 }}>
-                    <td>{item.product_name} <span style={{fontSize:'11px', color:'var(--text-dim)'}}>{item.investment_cost}/{item.sale_price}</span>{item.is_closed && <span style={{fontSize:'10px', color:'var(--brand)', marginLeft:'4px'}}>(Cerrado)</span>}</td>
+                    <td>{item.product_name} <span style={{fontSize:'11px', color:'var(--text-dim)'}}>{formatMoney(item.investment_cost)}/{formatMoney(item.sale_price)}</span>{item.is_closed && <span style={{fontSize:'10px', color:'var(--brand)', marginLeft:'4px'}}>(Cerrado)</span>}</td>
                     <td>{item.delivered}</td>
                     <td>{item.sold}</td>
                     <td>{item.is_closed ? 0 : item.remaining}</td>

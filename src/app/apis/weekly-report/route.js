@@ -79,8 +79,9 @@ export async function GET(request) {
           gasto,
           cnt_notes,
           entregado
-        FROM cobrokits.weekly_manual_entries
+        FROM cobrokits.daily_seller_entries
         WHERE entry_date BETWEEN $1::date AND ($1::date + interval '6 days')
+          AND ($2::uuid IS NULL OR seller_id = $2::uuid)
       ),
       -- Active customer count (for % effectiveness)
       active_customers AS (
@@ -117,7 +118,8 @@ export async function GET(request) {
           (cv.visit_date AT TIME ZONE 'America/Bogota')::date + interval '7 days' AS day,
           COALESCE(SUM(cv.new_balance), 0) AS saldo_anterior
         FROM cobrokits.customer_visits cv
-        WHERE ($2::uuid IS NULL OR cv.seller_id = $2::uuid)
+        WHERE (cv.visit_date AT TIME ZONE 'America/Bogota')::date BETWEEN ($1::date - interval '7 days')::date AND ($1::date - interval '1 day')::date
+          AND ($2::uuid IS NULL OR cv.seller_id = $2::uuid)
         GROUP BY (cv.visit_date AT TIME ZONE 'America/Bogota')::date
       ),
       -- Daily sale value from daily_seller_stock (sold * sale_price)

@@ -103,70 +103,6 @@ export default function Home() {
 
   const [activeTab, setActiveTab] = useState("dashboard");
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
-  const [visitFormKey, setVisitFormKey] = useState(0);
-  const [entregarFormKey, setEntregarFormKey] = useState(0);
-
-  const [visitItems, setVisitItems] = useState([]);
-  const [currentProductId, setCurrentProductId] = useState("");
-  const [currentQuantity, setCurrentQuantity] = useState("");
-  const [selectedVisitCustomer, setSelectedVisitCustomer] = useState("");
-
-  function addVisitItem() {
-    if (!currentProductId || !currentQuantity || currentQuantity <= 0) return;
-    const product = products.find(p => p.id === currentProductId);
-    if (!product) return;
-    const customerSelect = document.getElementById('visit-customer-select');
-    const customerId = customerSelect?.value;
-    if (!customerId) {
-      alert("Seleccione un cliente primero");
-      return;
-    }
-    const customer = customers.find(c => c.id === customerId);
-    if (customer) {
-      const visitDay = customer.visit_day !== null && customer.visit_day !== undefined ? Number(customer.visit_day) : null;
-      const todayDow = hoyColombiaDow();
-      if (visitDay !== null && visitDay !== todayDow) {
-        alert(`${customer.name} solo se visita los ${dayName(visitDay)}. Hoy es ${dayName(todayDow)}.`);
-        return;
-      }
-    }
-    setVisitItems(prev => {
-      const existing = prev.find(item => item.product_id === currentProductId);
-      if (existing) {
-        return prev.map(item => item.product_id === currentProductId ? { ...item, quantity: item.quantity + Number(currentQuantity) } : item);
-      }
-      return [...prev, { product_id: currentProductId, quantity: Number(currentQuantity), name: product.name }];
-    });
-    setCurrentProductId("");
-    setCurrentQuantity("");
-  }
-
-  function removeVisitItem(productId) {
-    setVisitItems(prev => prev.filter(item => item.product_id !== productId));
-  }
-
-  const [deliveryItems, setDeliveryItems] = useState([]);
-  const [currentDeliveryProductId, setCurrentDeliveryProductId] = useState("");
-  const [currentDeliveryQuantity, setCurrentDeliveryQuantity] = useState("");
-
-  function addDeliveryItem() {
-    if (!currentDeliveryProductId || !currentDeliveryQuantity || currentDeliveryQuantity <= 0) return;
-    const product = products.find(p => p.id === currentDeliveryProductId);
-    if (!product) return;
-    setDeliveryItems(prev => {
-      const existing = prev.find(item => item.product_id === currentDeliveryProductId);
-      if (existing) {
-        return prev.map(item => item.product_id === currentDeliveryProductId ? { ...item, quantity: item.quantity + Number(currentDeliveryQuantity) } : item);
-      }
-      return [...prev, { product_id: currentDeliveryProductId, quantity: Number(currentDeliveryQuantity), name: product.name }];
-    });
-    setCurrentDeliveryProductId("");
-    setCurrentDeliveryQuantity("");
-  }
-
-  function removeDeliveryItem(productId) {
-    setDeliveryItems(prev => prev.filter(item => item.product_id !== productId));
-  }
 
   const activeCustomers = useMemo(
     () => customers.filter((customer) => !activeSellerId || customer.seller_id === activeSellerId),
@@ -366,77 +302,6 @@ export default function Home() {
 
   function hoyColombia() {
     return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Bogota" }).format(new Date());
-  }
-
-  async function deliverDailyStock(event) {
-    event.preventDefault();
-    if (isSubmitting) return;
-    const formElement = event.currentTarget;
-    const form = new FormData(formElement);
-    if (deliveryItems.length === 0) {
-      setNotice("Agrega al menos un producto");
-      return;
-    }
-    setIsSubmitting(true);
-    try {
-      const sellerId = form.get("seller_id");
-      const stock_date = hoyColombia();
-      for (const item of deliveryItems) {
-        await api("/apis/daily-stock", {
-          method: "POST",
-          body: JSON.stringify({ action: "deliver", seller_id: sellerId, product_id: item.product_id, quantity: Number(item.quantity), stock_date }),
-        });
-      }
-      formElement.reset();
-      setDeliveryItems([]);
-      setNotice("Stock diario entregado");
-      setEntregarFormKey(k => k + 1);
-      await loadAll();
-    } catch (e) {
-      setNotice(e.message);
-    } finally {
-      setIsSubmitting(false);
-    }
-  }
-
-  async function registerVisit(event) {
-    event.preventDefault();
-    if (isSubmitting) return;
-    setIsSubmitting(true);
-    const formElement = event.currentTarget;
-    const form = new FormData(formElement);
-    try {
-      const hoy = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Bogota" }).format(new Date());
-      const result = await api("/apis/visits", {
-        method: "POST",
-        body: JSON.stringify({
-          seller_id: form.get("seller_id"),
-          customer_id: form.get("customer_id"),
-          items: visitItems,
-          payment_amount: form.get("payment_amount") || 0,
-          payment_method: form.get("payment_method") || null,
-          notes: form.get("notes"),
-          visit_date: hoy,
-        }),
-      }, { queueOffline: true });
-      formElement.reset();
-      setVisitItems([]);
-      setCurrentProductId("");
-      setCurrentQuantity("");
-      setSelectedVisitCustomer("");
-      setVisitFormKey(k => k + 1);
-      if (result.queued) {
-        setNotice("Visita guardada offline — se sincronizará cuando haya conexión");
-        await refreshPendingCount();
-      } else {
-        setNotice("Visita registrada");
-      }
-      if (!result.queued) await loadAll();
-    } catch (e) {
-      setNotice(e.message);
-    } finally {
-      setIsSubmitting(false);
-    }
   }
 
   async function syncPending() {
@@ -803,12 +668,12 @@ export default function Home() {
         )}
         {activeTab === 'registrar-visita' && 
           <ErrorBoundary key="registrar-visita" message="Error al cargar el registro de visitas">
-          <RegistrarVisita key={visitFormKey} registerVisit={registerVisit} sellers={sellers} activeSellerId={activeSellerId} setActiveSellerId={setActiveSellerId} activeCustomers={activeCustomers} formatMoney={formatMoney} products={products} currentProductId={currentProductId} setCurrentProductId={setCurrentProductId} currentQuantity={currentQuantity} setCurrentQuantity={setCurrentQuantity} addVisitItem={addVisitItem} visitItems={visitItems} removeVisitItem={removeVisitItem} isSubmitting={isSubmitting} loading={loading} visits={visits} activeSellerName={activeSellerName} selectedVisitCustomer={selectedVisitCustomer} setSelectedVisitCustomer={setSelectedVisitCustomer} />
+          <RegistrarVisita sellers={sellers} activeSellerId={activeSellerId} setActiveSellerId={setActiveSellerId} activeCustomers={activeCustomers} formatMoney={formatMoney} products={products} isSubmitting={isSubmitting} loading={loading} visits={visits} activeSellerName={activeSellerName} onRegistered={() => loadAll()} />
           </ErrorBoundary>
         }
         {activeTab === 'entregar-inventario' && 
           <ErrorBoundary key="entregar-inventario" message="Error al cargar la entrega de inventario">
-          <EntregarInventario key={entregarFormKey} deliverDailyStock={deliverDailyStock} sellers={sellers} activeSellerId={activeSellerId} products={products} currentDeliveryProductId={currentDeliveryProductId} setCurrentDeliveryProductId={setCurrentDeliveryProductId} currentDeliveryQuantity={currentDeliveryQuantity} setCurrentDeliveryQuantity={setCurrentDeliveryQuantity} addDeliveryItem={addDeliveryItem} deliveryItems={deliveryItems} removeDeliveryItem={removeDeliveryItem} formatMoney={formatMoney} isSubmitting={isSubmitting} />
+          <EntregarInventario sellers={sellers} activeSellerId={activeSellerId} products={products} formatMoney={formatMoney} onDelivered={() => loadAll()} />
           </ErrorBoundary>
         }
         {activeTab === 'inventario' && 

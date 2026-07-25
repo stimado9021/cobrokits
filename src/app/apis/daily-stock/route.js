@@ -11,8 +11,20 @@ export async function GET(request) {
     const { searchParams } = new URL(request.url);
     const sellerId = searchParams.get("sellerId");
     const stockDate = searchParams.get("stockDate"); // YYYY-MM-DD
+    const action = searchParams.get("action");
 
     if (!sellerId) return fail(new Error("sellerId requerido"), 400);
+
+    if (action === "dates") {
+      const rows = await query(
+        `SELECT DISTINCT stock_date::text AS stock_date
+         FROM cobrokits.daily_seller_stock
+         WHERE seller_id = $1::uuid
+         ORDER BY stock_date DESC`,
+        [sellerId]
+      );
+      return ok({ dates: rows.map(r => r.stock_date) });
+    }
 
     const rows = await query(
       `
@@ -47,6 +59,23 @@ export async function POST(request) {
         [seller_id, product_id, Number(quantity), stock_date || hoyColombia(), notes || null]
       );
       return ok({ result }, { status: 201 });
+    }
+
+    if (action === "deliver_batch") {
+      const { seller_id, stock_date, items } = body;
+      if (!seller_id || !Array.isArray(items) || items.length === 0) {
+        return fail(new Error("seller_id y items array requeridos"), 400);
+      }
+      const results = [];
+      for (const item of items) {
+        if (!item.product_id || !item.quantity) continue;
+        const [result] = await query(
+          `SELECT * FROM cobrokits.deliver_daily_stock($1::uuid, $2::uuid, $3::integer, $4::date, $5::text)`,
+          [seller_id, item.product_id, Number(item.quantity), stock_date || hoyColombia(), item.notes || null]
+        );
+        results.push(result);
+      }
+      return ok({ results }, { status: 201 });
     }
 
     if (action === "close_day") {
