@@ -74,7 +74,7 @@ function cellTitle(col, rawVal) {
 /* ─── Row definitions (matches the physical ledger) ───── */
 const ROWS = [
   { key: "suma_entrega",        label: "Cobros",               type: "money",   editable: false, desc: "Ventas nuevas dejadas en crédito = Σ(line_sale_total)" },
-  { key: "saldo_anterior",      label: "Saldo Ant.",           type: "money",   editable: false, desc: "Deuda total de los clientes al inicio de la semana" },
+  { key: "saldo_anterior",      label: "Saldo Ant.",           type: "money",   editable: true,  desc: "Deuda total de los clientes al inicio de la semana ( editable )" },
   { key: "inversion_dia",       label: "Costo",                type: "money",   editable: false, desc: "Costo de inversión = Σ(cantidad × costo_unitario)" },
   { key: "costo_cliente",       label: "Costo Cli.",           type: "money",   editable: false, desc: "Valor de venta = Σ(cantidad × precio_venta)" },
   { key: "m1_efectivo",         label: "Efectivo",             type: "money",   editable: false, desc: "Recaudo en efectivo = Σ(pagos método efectivo)" },
@@ -94,7 +94,7 @@ const ROWS = [
 
 // (La columna "Novedades" fue removida temporalmente)
 
-const MANUAL_KEYS = ["gasto", "cnt_notes", "dinero_a_entregar"];
+const MANUAL_KEYS = ["gasto", "cnt_notes", "dinero_a_entregar", "saldo_anterior"];
 
 /* ─── Empty day ───────────────────────────────────────── */
 function emptyDay(dateStr) {
@@ -173,15 +173,27 @@ export function ReportesSemanales({ activeSellerId = "", activeSellerName = "Tod
     const dayData = days[dayIdx];
     if (!dayData) return;
 
-    // Optimistic update
-    setDays(prev => prev.map((d, i) => i === dayIdx
-      ? { ...d, [key]: key === "cnt_notes" ? value : n(value) }
-      : d));
+    // Optimistic update (recalculate derived fields when saldo_anterior changes)
+    if (key === "saldo_anterior") {
+      setDays(prev => prev.map((d, i) => {
+        if (i !== dayIdx) return d;
+        const newSaldo = n(value);
+        const totalRecaudo = n(d.m1_efectivo) + n(d.m2_nequi);
+        const entrega = newSaldo + n(d.suma_entrega) - totalRecaudo;
+        const dMerca = (entrega + totalRecaudo) - n(d.costo_cliente) - n(d.suma_entrega);
+        return { ...d, saldo_anterior: newSaldo, entrega, d_merca: dMerca };
+      }));
+    } else {
+      setDays(prev => prev.map((d, i) => i === dayIdx
+        ? { ...d, [key]: key === "cnt_notes" ? value : n(value) }
+        : d));
+    }
     setEditing(null);
 
     const updatedGasto = key === "gasto" ? n(value) : n(dayData.gasto);
     const updatedNotes = key === "cnt_notes" ? value : dayData.cnt_notes;
     const updatedEntregado = key === "dinero_a_entregar" ? n(value) : n(dayData.dinero_a_entregar);
+    const updatedSaldoAnterior = key === "saldo_anterior" ? n(value) : (dayData.saldo_anterior != null ? n(dayData.saldo_anterior) : null);
 
     setSaving(true);
     try {
@@ -190,6 +202,7 @@ export function ReportesSemanales({ activeSellerId = "", activeSellerName = "Tod
         gasto: n(updatedGasto),
         cnt_notes: updatedNotes || "",
         entregado: updatedEntregado,
+        saldo_anterior: updatedSaldoAnterior,
       };
       const res = await fetch("/apis/weekly-report", {
         method: "PUT",

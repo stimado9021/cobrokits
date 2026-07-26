@@ -72,16 +72,16 @@ export async function GET(request) {
           AND cv.payment_amount > 0
         GROUP BY (cv.visit_date AT TIME ZONE 'America/Bogota')::date
       ),
-      -- Manual entries per day
+      -- Manual entries per day (from weekly_manual_entries)
       daily_manual AS (
         SELECT
           entry_date AS day,
           gasto,
           cnt_notes,
-          entregado
-        FROM cobrokits.daily_seller_entries
+          entregado,
+          saldo_anterior AS manual_saldo_anterior
+        FROM cobrokits.weekly_manual_entries
         WHERE entry_date BETWEEN $1::date AND ($1::date + interval '6 days')
-          AND ($2::uuid IS NULL OR seller_id = $2::uuid)
       ),
       -- Active customer count (for % effectiveness)
       active_customers AS (
@@ -148,12 +148,12 @@ export async function GET(request) {
           ELSE 0
         END::int                                                  AS efectividad_pct,
         COALESCE(dvi.suma_entrega, 0)                            AS suma_entrega,
-        -- Saldo anterior = suma_entrega del mismo día hace 7 días
-        COALESCE(dsa.saldo_anterior, 0)              AS saldo_anterior,
         COALESCE(dvi.inversion_dia, 0)                           AS inversion_dia,
         COALESCE(dsv.costo_cliente, 0)                           AS costo_cliente,
         COALESCE(dm.gasto, 0)                                    AS gasto,
         COALESCE(dm.cnt_notes, '')                               AS cnt_notes,
+        -- Saldo anterior: manual override if provided, otherwise calculated from 7 days ago
+        COALESCE(dm.manual_saldo_anterior, dsa.saldo_anterior, 0)  AS saldo_anterior,
         -- Dinero a entregar = manual entry if provided, otherwise Abono - Gasto
         COALESCE(dm.entregado, COALESCE(dp.abono_total, 0)
           - COALESCE(dm.gasto, 0))                                AS dinero_a_entregar,
@@ -202,23 +202,24 @@ export async function GET(request) {
 export async function PUT(request) {
   try {
     const body = await request.json();
-    const { date, gasto = 0, cnt_notes = "", entregado } = body;
+    const { date, gasto = 0, cnt_notes = "", entregado, saldo_anterior } = body;
 
     if (!date) return fail(new Error("date requerido"), 400);
 
     const [entry] = await query(
       `
-      INSERT INTO cobrokits.weekly_manual_entries (entry_date, gasto, cnt_notes, entregado)
-      VALUES ($1::date, $2, $3, $4)
+      INSERT INTO cobrokits.weekly_manual_entries (entry_date, gasto, cnt_notes, entregado, saldo_anterior)
+      VALUES ($1::date, $2, $3, $4, $5)
       ON CONFLICT (entry_date)
       DO UPDATE SET
-        gasto      = EXCLUDED.gasto,
-        cnt_notes  = EXCLUDED.cnt_notes,
-        entregado  = EXCLUDED.entregado,
-        updated_at = now()
-      RETURNING entry_date::text AS day, gasto, cnt_notes, entregado
+        gasto           = EXCLUDED.gasto,
+        cnt_notes       = EXCLUDED.cnt_notes,
+        entregado       = EXCLUDED.entregado,
+        saldo_anterior  = EXCLUDED.saldo_anterior,
+        updated_at      = now()
+      RETURNING entry_date::text AS day, gasto, cnt_notes, entregado, saldo_anterior
       `,
-      [date, gasto, cnt_notes, entregado ?? null]
+      [date, gasto, cnt_notes, entregado ?? null, saldo_anterior ?? null]
     );
 
     return ok({ entry });

@@ -174,28 +174,30 @@ CREATE TABLE IF NOT EXISTS warehouse_stock_entries (
 
 -- Weekly report manual entries
 CREATE TABLE IF NOT EXISTS weekly_manual_entries (
-  id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  entry_date DATE NOT NULL,
-  gasto      NUMERIC(14,2) NOT NULL DEFAULT 0,
-  d1         NUMERIC(14,2) NOT NULL DEFAULT 0,
-  d2         NUMERIC(14,2) NOT NULL DEFAULT 0,
-  cnt_notes  TEXT,
-  entregado  NUMERIC(14,2) NOT NULL DEFAULT 0,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  entry_date      DATE NOT NULL,
+  gasto           NUMERIC(14,2) NOT NULL DEFAULT 0,
+  d1              NUMERIC(14,2) NOT NULL DEFAULT 0,
+  d2              NUMERIC(14,2) NOT NULL DEFAULT 0,
+  cnt_notes       TEXT,
+  entregado       NUMERIC(14,2) NOT NULL DEFAULT 0,
+  saldo_anterior  NUMERIC(14,2),
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
   UNIQUE (entry_date)
 );
 
 -- Daily report per-seller manual entries (gasto, notes, entregado)
 CREATE TABLE IF NOT EXISTS daily_seller_entries (
-  id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  entry_date DATE NOT NULL,
-  seller_id  UUID NOT NULL REFERENCES sellers(id),
-  gasto      NUMERIC(14,2) NOT NULL DEFAULT 0,
-  cnt_notes  TEXT,
-  entregado  NUMERIC(14,2),
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  entry_date      DATE NOT NULL,
+  seller_id       UUID NOT NULL REFERENCES sellers(id),
+  gasto           NUMERIC(14,2) NOT NULL DEFAULT 0,
+  cnt_notes       TEXT,
+  entregado       NUMERIC(14,2),
+  saldo_anterior  NUMERIC(14,2),
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
   CONSTRAINT uq_daily_seller_entry UNIQUE (entry_date, seller_id)
 );
 

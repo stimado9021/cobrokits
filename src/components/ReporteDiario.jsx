@@ -46,7 +46,7 @@ function money(val) {
 /* ─── Column definitions ─────────────────────────────── */
 const COLS = [
   { key: "suma_entrega",        label: "Cobros",               type: "money",   editable: false, desc: "Ventas nuevas dejadas en crédito hoy = Σ(line_sale_total)" },
-  { key: "saldo_anterior",      label: "Saldo Ant.",           type: "money",   editable: false, desc: "Deuda de los clientes al inicio del día" },
+  { key: "saldo_anterior",      label: "Saldo Ant.",           type: "money",   editable: true,  desc: "Deuda de los clientes al inicio del día ( editable )" },
   { key: "inversion_dia",       label: "Costo",                type: "money",   editable: false, desc: "Costo de inversión = Σ(cantidad × costo_unitario)" },
   { key: "costo_cliente",       label: "Costo Cli.",           type: "money",   editable: false, desc: "Valor de venta = Σ(cantidad × precio_venta)" },
   { key: "m1_efectivo",         label: "Efectivo",             type: "money",   editable: false, desc: "Recaudo en efectivo = Σ(pagos método efectivo)" },
@@ -64,7 +64,7 @@ const COLS = [
   { key: "efectividad_pct",     label: "% Efect.",             type: "percent", editable: false, desc: "(Efectivo + Nequi) ÷ Cobros × 100" },
 ];
 
-const MANUAL_KEYS = ["gasto", "dinero_a_entregar"];
+const MANUAL_KEYS = ["gasto", "dinero_a_entregar", "saldo_anterior"];
 
 function cellTitle(col, rawVal) {
   const label = col.label;
@@ -155,13 +155,30 @@ export function ReporteDiario({ activeSellerId = "", activeSellerName = "Todos l
     const sellerData = sellers[sellerIdx];
     if (!sellerData) return;
 
-    setSellers(prev => prev.map((s, i) => i === sellerIdx
-      ? { ...s, [key]: n(value) }
-      : s));
+    // Optimistic update (recalculate derived fields when saldo_anterior changes)
+    if (key === "saldo_anterior") {
+      setSellers(prev => prev.map((s, i) => {
+        if (i !== sellerIdx) return s;
+        const newSaldo = n(value);
+        const abono = n(s.m1_efectivo) + n(s.m2_nequi);
+        const entrega = newSaldo + n(s.suma_entrega) - abono;
+        return {
+          ...s,
+          saldo_anterior: newSaldo,
+          entrega,
+          d_merca: (entrega + abono) - n(s.costo_cliente) - n(s.suma_entrega),
+        };
+      }));
+    } else {
+      setSellers(prev => prev.map((s, i) => i === sellerIdx
+        ? { ...s, [key]: n(value) }
+        : s));
+    }
     setEditing(null);
 
     const updatedGasto = key === "gasto" ? n(value) : n(sellerData.gasto);
     const updatedEntregado = key === "dinero_a_entregar" ? n(value) : n(sellerData.dinero_a_entregar);
+    const updatedSaldoAnterior = key === "saldo_anterior" ? n(value) : (sellerData.saldo_anterior != null ? n(sellerData.saldo_anterior) : null);
 
     setSaving(true);
     try {
@@ -171,6 +188,7 @@ export function ReporteDiario({ activeSellerId = "", activeSellerName = "Todos l
         gasto: n(updatedGasto),
         cnt_notes: sellerData.cnt_notes || "",
         entregado: updatedEntregado,
+        saldo_anterior: updatedSaldoAnterior,
       };
       const res = await fetch("/apis/daily-report", {
         method: "PUT",
@@ -501,7 +519,7 @@ export function ReporteDiario({ activeSellerId = "", activeSellerName = "Todos l
               ))
             ) : sellers.length === 0 ? (
               <tr>
-                <td colSpan={COLS.length + 1} style={{textAlign:'center', padding:'24px', color:'#999'}}>
+                <td colSpan={COLS.length + 1} style={{textAlign:'center', padding:'24px', color:'var(--muted)'}}>
                   No hay datos para esta fecha
                 </td>
               </tr>

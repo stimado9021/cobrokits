@@ -72,7 +72,7 @@ export async function GET(request) {
         GROUP BY dss.seller_id
       ),
       daily_manual AS (
-        SELECT seller_id, gasto, cnt_notes, entregado
+        SELECT seller_id, gasto, cnt_notes, entregado, saldo_anterior AS manual_saldo_anterior
         FROM cobrokits.daily_seller_entries
         WHERE entry_date = $1::date
       ),
@@ -101,8 +101,8 @@ export async function GET(request) {
           ELSE 0
         END::int AS efectividad_pct,
         COALESCE(dvi.suma_entrega, 0) AS suma_entrega,
-        -- Saldo anterior = suma_entrega del mismo día hace 7 días
-        COALESCE(sa.saldo_anterior, 0) AS saldo_anterior,
+        -- Saldo anterior: manual override if provided, otherwise calculated
+        COALESCE(dm.manual_saldo_anterior, sa.saldo_anterior, 0) AS saldo_anterior,
         COALESCE(dvi.inversion_dia, 0) AS inversion_dia,
         COALESCE(dsv.costo_cliente, 0) AS costo_cliente,
         COALESCE(dm.gasto, 0) AS gasto,
@@ -130,23 +130,24 @@ export async function GET(request) {
 export async function PUT(request) {
   try {
     const body = await request.json();
-    const { date, seller_id, gasto = 0, cnt_notes = "", entregado } = body;
+    const { date, seller_id, gasto = 0, cnt_notes = "", entregado, saldo_anterior } = body;
 
     if (!date || !seller_id) return fail(new Error("date y seller_id requeridos"), 400);
 
     const [entry] = await query(
       `
-      INSERT INTO cobrokits.daily_seller_entries (entry_date, seller_id, gasto, cnt_notes, entregado)
-      VALUES ($1::date, $2::uuid, $3, $4, $5)
+      INSERT INTO cobrokits.daily_seller_entries (entry_date, seller_id, gasto, cnt_notes, entregado, saldo_anterior)
+      VALUES ($1::date, $2::uuid, $3, $4, $5, $6)
       ON CONFLICT (entry_date, seller_id)
       DO UPDATE SET
-        gasto      = EXCLUDED.gasto,
-        cnt_notes  = EXCLUDED.cnt_notes,
-        entregado  = EXCLUDED.entregado,
-        updated_at = now()
-      RETURNING entry_date::text AS day, seller_id, gasto, cnt_notes, entregado
+        gasto           = EXCLUDED.gasto,
+        cnt_notes       = EXCLUDED.cnt_notes,
+        entregado       = EXCLUDED.entregado,
+        saldo_anterior  = EXCLUDED.saldo_anterior,
+        updated_at      = now()
+      RETURNING entry_date::text AS day, seller_id, gasto, cnt_notes, entregado, saldo_anterior
       `,
-      [date, seller_id, gasto, cnt_notes, entregado ?? null]
+      [date, seller_id, gasto, cnt_notes, entregado ?? null, saldo_anterior ?? null]
     );
 
     return ok({ entry });
