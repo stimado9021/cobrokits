@@ -61,7 +61,7 @@ function ProductRow({ product, onAdded }) {
     <>
       <tr
         style={{
-          background: open ? "rgba(15,118,110,0.04)" : undefined,
+          background: open ? "rgba(59,130,246,0.04)" : undefined,
           transition: "background 0.2s",
         }}
       >
@@ -114,7 +114,7 @@ function ProductRow({ product, onAdded }) {
 
       {/* Inline expansion */}
       {open && (
-        <tr style={{ background: "rgba(15,118,110,0.04)" }}>
+        <tr style={{ background: "rgba(59,130,246,0.04)" }}>
           <td colSpan={3} style={{ paddingBottom: "12px", paddingTop: "4px" }}>
             <form
               onSubmit={handleAdd}
@@ -404,7 +404,7 @@ export function Inventario() {
                   width: `${90 - n * 8}%`,
                   borderRadius: "6px",
                   background:
-                    "linear-gradient(90deg,#222 25%,#2d2d2d 50%,#222 75%)",
+                    "linear-gradient(90deg,#F1F5F9 25%,#E2E8F0 50%,#F1F5F9 75%)",
                   backgroundSize: "200% 100%",
                   animation: "shimmer 1.4s infinite",
                 }}

@@ -7,7 +7,7 @@ function SkeletonLine({ width = "60%", height = "1.2rem" }) {
       width,
       height,
       borderRadius: "6px",
-      background: "linear-gradient(90deg, #222 25%, #2d2d2d 50%, #222 75%)",
+      background: "linear-gradient(90deg, #F1F5F9 25%, #E2E8F0 50%, #F1F5F9 75%)",
       backgroundSize: "200% 100%",
       animation: "shimmer 1.4s infinite",
       verticalAlign: "middle"
