@@ -1,5 +1,5 @@
-const CACHE_STATIC = "cobrokits-static-v1";
-const CACHE_API = "cobrokits-api-v1";
+const CACHE_STATIC = "cobrokits-static-v2";
+const CACHE_API = "cobrokits-api-v2";
 
 const PRECACHE = ["/"];
 

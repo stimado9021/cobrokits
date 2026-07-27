@@ -1,5 +1,6 @@
-import { useState, useEffect, useMemo, useRef } from "react";
-import { ClipboardList, PackagePlus, Save } from "lucide-react";
+import { useState, useEffect, useMemo } from "react";
+import { ClipboardList, Save } from "lucide-react";
+import { Modal } from "./Modal";
 
 function dayName(dayNum) {
   const days = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
@@ -32,21 +33,20 @@ export function RegistrarVisita({
   const todayDow = useMemo(() => hoyColombiaDow(), []);
 
   const [selectedCustomer, setSelectedCustomer] = useState("");
-  const [visitItems, setVisitItems] = useState([]);
-  const [currentProductId, setCurrentProductId] = useState("");
-  const [currentQuantity, setCurrentQuantity] = useState("");
+  const [deliveryQuantities, setDeliveryQuantities] = useState({});
+  const [deliveryError, setDeliveryError] = useState("");
   const [paymentAmount, setPaymentAmount] = useState("");
-  const [paymentMethod, setPaymentMethod] = useState("");
+  const [paymentMethod, setPaymentMethod] = useState("efectivo");
   const [notes, setNotes] = useState("");
   const [selectedDate, setSelectedDate] = useState(today);
+  const [editingVisit, setEditingVisit] = useState(null);
+  const [editValues, setEditValues] = useState({});
 
   useEffect(() => {
     setSelectedCustomer("");
-    setVisitItems([]);
-    setCurrentProductId("");
-    setCurrentQuantity("");
+    setDeliveryQuantities({});
     setPaymentAmount("");
-    setPaymentMethod("");
+    setPaymentMethod("efectivo");
     setNotes("");
   }, [activeSellerId]);
 
@@ -101,81 +101,49 @@ export function RegistrarVisita({
 
   const effectiveStockMap = useMemo(() => {
     const map = { ...stockMap };
-    visitItems.forEach(item => {
-      map[item.product_id] = Math.max(0, (map[item.product_id] || 0) - item.quantity);
+    Object.entries(deliveryQuantities).forEach(([product_id, quantity]) => {
+      map[product_id] = Math.max(0, (map[product_id] || 0) - quantity);
     });
     return map;
-  }, [stockMap, visitItems]);
+  }, [stockMap, deliveryQuantities]);
 
   const hasAnyStock = useMemo(
     () => Object.values(effectiveStockMap).some((q) => q > 0),
     [effectiveStockMap]
   );
 
-  // ─── Stock warning ────────────────────────────────
-  const timerRef = useRef(null);
-  const [showWarning, setShowWarning] = useState(false);
-  const hasStock = useMemo(() => {
-    if (!activeSellerId || !currentProductId) return true;
-    return (effectiveStockMap[currentProductId] ?? 0) > 0;
-  }, [activeSellerId, currentProductId, effectiveStockMap]);
-
-  useEffect(() => {
-    if (timerRef.current) clearTimeout(timerRef.current);
-    if (!hasStock) {
-      setShowWarning(true);
-      timerRef.current = setTimeout(() => setShowWarning(false), 5000);
-    } else {
-      setShowWarning(false);
-    }
-    return () => { if (timerRef.current) clearTimeout(timerRef.current); };
-  }, [hasStock]);
-
-  // ─── Add item ─────────────────────────────────────
-  function addVisitItem() {
-    if (!currentProductId || !currentQuantity || Number(currentQuantity) <= 0) return;
-    const product = products.find(p => p.id === currentProductId);
-    if (!product) return;
-
-    const qtyNum = Number(currentQuantity);
-    const available = effectiveStockMap[currentProductId] || 0;
-    if (qtyNum > available) {
-      alert(`Solo hay ${available} unidades disponibles de ${product.name}`);
+  // ─── Update delivery quantities ───
+  function updateDeliveryQty(productId, value) {
+    const qty = Number(value);
+    if (isNaN(qty) || qty <= 0) {
+      setDeliveryQuantities(prev => {
+        const next = { ...prev };
+        delete next[productId];
+        return next;
+      });
       return;
     }
-
-    setVisitItems(prev => {
-      const existing = prev.find(item => item.product_id === currentProductId);
-      if (existing) {
-        const newQty = existing.quantity + qtyNum;
-        if (newQty > available) {
-          alert(`Solo hay ${available} unidades disponibles de ${product.name}`);
-          return prev;
-        }
-        return prev.map(item => item.product_id === currentProductId ? { ...item, quantity: newQty } : item);
-      }
-      return [...prev, { product_id: currentProductId, quantity: qtyNum, name: product.name }];
-    });
-    setCurrentProductId("");
-    setCurrentQuantity("");
+    const available = effectiveStockMap[productId] ?? 0;
+    if (qty > available) {
+      setDeliveryError(`Stock insuficiente: solo hay ${available} unidades`);
+      return;
+    }
+    setDeliveryError("");
+    setDeliveryQuantities(prev => ({ ...prev, [productId]: qty }));
   }
 
-  function removeVisitItem(productId) {
-    setVisitItems(prev => prev.filter(item => item.product_id !== productId));
-  }
-
-  // ─── Submit ───────────────────────────────────────
+  // ─── Submit ─────────────────────────────
   const canSubmit = useMemo(() => {
     if (!activeSellerId || !selectedCustomer) return false;
-    if (visitItems.length === 0 && (!paymentAmount || Number(paymentAmount) <= 0)) return false;
+    const hasItems = Object.keys(deliveryQuantities).length > 0;
+    if (!hasItems && (!paymentAmount || Number(paymentAmount) <= 0)) return false;
     return true;
-  }, [activeSellerId, selectedCustomer, visitItems, paymentAmount]);
+  }, [activeSellerId, selectedCustomer, deliveryQuantities, paymentAmount]);
 
   async function handleSubmit(event) {
     event.preventDefault();
     if (isSubmitting || !canSubmit) return;
 
-    // Validate visit day
     const customer = activeCustomers.find(c => c.id === selectedCustomer);
     if (customer) {
       const visitDay = customer.visit_day !== null && customer.visit_day !== undefined ? Number(customer.visit_day) : null;
@@ -185,6 +153,11 @@ export function RegistrarVisita({
       }
     }
 
+    const items = Object.entries(deliveryQuantities).map(([product_id, quantity]) => {
+      const product = products.find(p => p.id === product_id);
+      return { product_id, quantity, name: product?.name || "" };
+    });
+
     try {
       const res = await fetch("/apis/visits", {
         method: "POST",
@@ -192,7 +165,7 @@ export function RegistrarVisita({
         body: JSON.stringify({
           seller_id: activeSellerId,
           customer_id: selectedCustomer,
-          items: visitItems,
+          items,
           payment_amount: Number(paymentAmount) || 0,
           payment_method: paymentMethod || null,
           notes: notes || null,
@@ -201,12 +174,10 @@ export function RegistrarVisita({
       });
       const data = await res.json();
       if (data.success) {
-        setVisitItems([]);
+setDeliveryQuantities({});
         setSelectedCustomer("");
-        setCurrentProductId("");
-        setCurrentQuantity("");
         setPaymentAmount("");
-        setPaymentMethod("");
+        setPaymentMethod("efectivo");
         setNotes("");
         if (onRegistered) onRegistered();
       } else {
@@ -250,57 +221,88 @@ export function RegistrarVisita({
             Vendedor sin inventario hoy. Asígnele productos en "Entregar Inventario" primero.
           </div>
         )}
-        <div className="row">
-          <select value={currentProductId} onChange={(e) => setCurrentProductId(e.target.value)}>
-            <option value="">Producto dejado</option>
-            {products
-              .filter((p) => (effectiveStockMap[p.id] ?? 0) > 0)
-              .map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name} ({effectiveStockMap[p.id]} uds)
-                </option>
-              ))}
-          </select>
-          <input
-            value={currentQuantity}
-            onChange={(e) => setCurrentQuantity(e.target.value)}
-            type="number"
-            min="1"
-            placeholder="Cant."
-            style={{ width: "70px" }}
-          />
-          <button type="button" className="iconButton" onClick={addVisitItem} title="Agregar" disabled={isSubmitting || !currentProductId}>
-            <PackagePlus size={18} />
-          </button>
+        {deliveryError && (
+          <p style={{ fontSize: "12px", color: "var(--red)", margin: "4px 0" }}>{deliveryError}</p>
+        )}
+        <div className="row" style={{ overflowX: "auto" }}>
+          <table className="dataTable" style={{ width: "100%", fontSize: "12px", borderCollapse: "collapse" }}>
+            <thead>
+              <tr>
+                <th style={{ padding: "4px 8px", textAlign: "left", fontSize: "11px" }}>Producto</th>
+                <th style={{ padding: "4px 8px", textAlign: "center", fontSize: "11px" }}>Stock</th>
+                <th style={{ padding: "4px 8px", textAlign: "center", fontSize: "11px" }}>Cant.</th>
+              </tr>
+            </thead>
+            <tbody>
+              {products.map((p) => {
+                const stock = effectiveStockMap[p.id] ?? 0;
+                return (
+                  <tr key={p.id}>
+                    <td style={{ padding: "3px 8px", fontSize: "12px" }}>{p.name}</td>
+                    <td style={{ padding: "3px 8px", textAlign: "center", fontWeight: "bold", fontSize: "12px" }}>{stock}</td>
+                    <td style={{ padding: "3px 8px", textAlign: "center" }}>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        placeholder="0"
+                        value={deliveryQuantities[p.id] || ""}
+                        onChange={(e) => updateDeliveryQty(p.id, e.target.value)}
+                        style={{ width: "60px", textAlign: "center", padding: "3px 6px", fontSize: "12px", minHeight: "28px" }}
+                        disabled={stock === 0}
+                      />
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
-        {showWarning && (
-          <div className="notice" style={{ border: "1px solid rgba(245,158,11,0.3)", background: "rgba(245,158,11,0.1)", color: "var(--accent)", margin: "0" }}>
-            No hay suficientes existencias de este producto.
-          </div>
-        )}
-        {visitItems.length > 0 && (
-          <div className="pending-items">
-            {visitItems.map(item => (
-              <div key={item.product_id} className="pending-item">
-                <span>{item.quantity}x {item.name}</span>
-                <button type="button" className="text-danger-button" onClick={() => removeVisitItem(item.product_id)}>✕</button>
-              </div>
-            ))}
-          </div>
-        )}
-        <div className="row">
+        <div className="row" style={{ gridTemplateColumns: "1fr 1fr", gap: "8px", alignItems: "center" }}>
           <input
             type="number"
             min="0"
-            placeholder="Abono"
+            placeholder="$ Abono"
             value={paymentAmount}
             onChange={(e) => setPaymentAmount(e.target.value)}
+            style={{ width: "100%", fontSize: "13px" }}
           />
-          <select value={paymentMethod} onChange={(e) => setPaymentMethod(e.target.value)}>
-            <option value="">Metodo</option>
-            <option value="efectivo">Efectivo</option>
-            <option value="nequi">Nequi</option>
-          </select>
+          <div style={{ display: "flex", borderRadius: "8px", overflow: "hidden", border: "1px solid var(--brand)" }}>
+            <button
+              type="button"
+              onClick={() => setPaymentMethod("efectivo")}
+              style={{
+                flex: 1,
+                padding: "7px 0",
+                border: "none",
+                background: paymentMethod === "efectivo" ? "var(--brand)" : "var(--surface-2)",
+                color: paymentMethod === "efectivo" ? "#fff" : "var(--text-dim)",
+                cursor: "pointer",
+                fontSize: "12px",
+                fontWeight: paymentMethod === "efectivo" ? "700" : "500",
+                transition: "all 0.25s",
+              }}
+            >
+              Efectivo
+            </button>
+            <div style={{ width: "1px", background: "var(--line)" }} />
+            <button
+              type="button"
+              onClick={() => setPaymentMethod("nequi")}
+              style={{
+                flex: 1,
+                padding: "7px 0",
+                border: "none",
+                background: paymentMethod === "nequi" ? "var(--brand)" : "var(--surface-2)",
+                color: paymentMethod === "nequi" ? "#fff" : "var(--text-dim)",
+                cursor: "pointer",
+                fontSize: "12px",
+                fontWeight: paymentMethod === "nequi" ? "700" : "500",
+                transition: "all 0.25s",
+              }}
+            >
+              Nequi
+            </button>
+          </div>
         </div>
         <input placeholder="Nota" value={notes} onChange={(e) => setNotes(e.target.value)} />
         <button className="primary" type="submit" disabled={isSubmitting || !canSubmit}>
@@ -339,6 +341,7 @@ export function RegistrarVisita({
                 <th>Venta</th>
                 <th>Abono</th>
                 <th>Deuda</th>
+                <th></th>
               </tr>
             </thead>
             <tbody>
@@ -353,7 +356,7 @@ export function RegistrarVisita({
                   </tr>
                 ))
               ) : filteredVisits.length === 0 ? (
-                <tr><td colSpan="5" className="empty-cell">Sin visitas en esta fecha</td></tr>
+                <tr><td colSpan="6" className="empty-cell">Sin visitas en esta fecha</td></tr>
               ) : (
                 <>
                   {filteredVisits.map((visit) => (
@@ -369,6 +372,24 @@ export function RegistrarVisita({
                       <td className="money-cell">{formatMoney(visit.sale_total)}</td>
                       <td className="money-cell">{formatMoney(visit.payment_total)}</td>
                       <td className="money-cell">{formatMoney(visit.new_balance)}</td>
+                      <td>
+                        <button
+                          type="button"
+                          className="iconButton"
+                          onClick={() => {
+                            setEditingVisit(visit);
+                            setEditValues({
+                              previous_balance: visit.previous_balance,
+                              sale_total: visit.sale_total,
+                              payment_amount: visit.payment_total,
+                              payment_method: visit.payment_method || "",
+                            });
+                          }}
+                          title="Editar"
+                        >
+                          ✎
+                        </button>
+                      </td>
                     </tr>
                   ))}
                   <tr className="visitas-totals">
@@ -377,13 +398,74 @@ export function RegistrarVisita({
                     <td className="money-cell">{formatMoney(filteredVisits.reduce((s, v) => s + Number(v.sale_total || 0), 0))}</td>
                     <td className="money-cell">{formatMoney(filteredVisits.reduce((s, v) => s + Number(v.payment_total || 0), 0))}</td>
                     <td className="money-cell">{formatMoney(filteredVisits.reduce((s, v) => s + Number(v.new_balance || 0), 0))}</td>
+                    <td></td>
                   </tr>
                 </>
               )}
             </tbody>
           </table>
         </div>
-      </section>
-    </section>
-  );
-}
+       </section>
+
+       {editingVisit && (
+         <Modal title="Editar visita" onClose={() => setEditingVisit(null)}>
+           <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+             <div>
+               <label style={{ fontSize: "12px", color: "var(--text-dim)", display: "block", marginBottom: "4px" }}>Cliente</label>
+               <p style={{ fontWeight: "600" }}>{editingVisit.customer_name}</p>
+             </div>
+             <div>
+               <label style={{ fontSize: "12px", color: "var(--text-dim)", display: "block", marginBottom: "4px" }}>Saldo anterior ($)</label>
+               <input
+                 type="number"
+                 min="0"
+                value={editValues.previous_balance ?? ""}
+                 onChange={(e) => setEditValues(prev => ({ ...prev, previous_balance: e.target.value }))}
+                 style={{ width: "100%" }}
+               />
+             </div>
+             <div>
+               <label style={{ fontSize: "12px", color: "var(--text-dim)", display: "block", marginBottom: "4px" }}>Total venta ($)</label>
+               <input
+                 type="number"
+                 min="0"
+                 value={editValues.sale_total ?? ""}
+                 onChange={(e) => setEditValues(prev => ({ ...prev, sale_total: e.target.value }))}
+                 style={{ width: "100%" }}
+               />
+             </div>
+             <div>
+               <label style={{ fontSize: "12px", color: "var(--text-dim)", display: "block", marginBottom: "4px" }}>Abono ($)</label>
+               <input
+                 type="number"
+                 min="0"
+                 value={editValues.payment_amount ?? ""}
+                 onChange={(e) => setEditValues(prev => ({ ...prev, payment_amount: e.target.value }))}
+                 style={{ width: "100%" }}
+               />
+             </div>
+             <div>
+               <label style={{ fontSize: "12px", color: "var(--text-dim)", display: "block", marginBottom: "4px" }}>Nuevo saldo</label>
+               <p style={{ fontWeight: "600", color: "var(--brand)" }}>
+                 {formatMoney(
+                   (Number(editValues.previous_balance) || 0) +
+                   (Number(editValues.sale_total) || 0) -
+                   (Number(editValues.payment_amount) || 0)
+                 )}
+               </p>
+             </div>
+             <button
+               className="primary"
+               onClick={() => {
+                 setEditingVisit(null);
+                 setEditValues({});
+               }}
+             >
+               Guardar
+             </button>
+           </div>
+         </Modal>
+       )}
+     </section>
+   );
+ }

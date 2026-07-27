@@ -3,7 +3,7 @@ import pg from "pg";
 const { Pool } = pg;
 const isServer = typeof window === "undefined";
 
-let pool;
+let pool = global.pgPool;
 
 function getPool() {
   if (!process.env.DATABASE_URL) {
@@ -16,7 +16,7 @@ function getPool() {
       ssl: { rejectUnauthorized: false },
       max: 10,
       idleTimeoutMillis: 30000,
-      connectionTimeoutMillis: 10000,
+      connectionTimeoutMillis: 15000,
     });
     pool.on('connect', client => {
       client.query("SET search_path TO cobrokits, public").catch(err => console.error("Error setting search_path:", err));
@@ -25,6 +25,10 @@ function getPool() {
     pool.on('error', err => {
       console.error("[DB POOL ERROR]", err?.message);
     });
+    
+    if (process.env.NODE_ENV !== "production") {
+      global.pgPool = pool;
+    }
   }
 
   return pool;

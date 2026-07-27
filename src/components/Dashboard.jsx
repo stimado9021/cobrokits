@@ -62,6 +62,7 @@ export function Dashboard({
   
   // Meta del vendedor activo (o global si no hay filtro)
   const sellerTargetToday = filteredBalances.reduce((sum, b) => sum + Number(b.current_balance || 0), 0);
+  const globalTargetToday = todayBalances.reduce((sum, b) => sum + Number(b.current_balance || 0), 0);
   // Total cobrado hoy (global)
   const totalCollectedToday = Number(totals.collected_today || 0);
 
@@ -97,22 +98,22 @@ export function Dashboard({
             </>
           ) : (
             <>
-              <article>
+              <article title="Suma global de la deuda de todos los clientes a visitar hoy (sin filtrar por vendedor)">
                 <Banknote size={20} />
                 <span>Por cobrar hoy</span>
-                <strong>{formatMoney(sellerTargetToday)}</strong>
+                <strong>{formatMoney(globalTargetToday)}</strong>
               </article>
-              <article>
+              <article title="Total de abonos recibidos por Nequi en el día de hoy">
                 <CreditCard size={20} />
                 <span>Nequi hoy</span>
                 <strong>{formatMoney(totalNequi)}</strong>
               </article>
-              <article>
+              <article title="Total de abonos recibidos en efectivo en el día de hoy">
                 <ClipboardList size={20} />
                 <span>Efectivo hoy</span>
                 <strong>{formatMoney(totalCash)}</strong>
               </article>
-              <article>
+              <article title="Suma total de abonos (Efectivo + Nequi) cobrados en el día de hoy">
                 <Boxes size={20} />
                 <span>Produccion hoy</span>
                 <strong>{formatMoney(totalProduction)}</strong>

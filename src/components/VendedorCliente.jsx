@@ -5,7 +5,6 @@ export function VendedorCliente({ seller, onNewCustomer, onBack }) {
   const [name, setName] = useState("");
   const [address, setAddress] = useState("");
   const [phone, setPhone] = useState("");
-  const [visitDay, setVisitDay] = useState("6");
   const [neighborhood, setNeighborhood] = useState("");
   const [saving, setSaving] = useState(false);
 
@@ -15,11 +14,14 @@ export function VendedorCliente({ seller, onNewCustomer, onBack }) {
     if (!name.trim()) return;
     setSaving(true);
     try {
+      const d = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Bogota" }));
+      const todayDow = d.getDay();
+
       await onNewCustomer({
         name: name.trim(),
         address: address.trim(),
         phone: phone.trim() || null,
-        visit_day: Number(visitDay),
+        visit_day: todayDow,
         neighborhood: neighborhood.trim() || null,
       });
       if (onBack) onBack();
@@ -29,8 +31,6 @@ export function VendedorCliente({ seller, onNewCustomer, onBack }) {
       setSaving(false);
     }
   }
-
-  const days = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
 
   return (
     <form className="seller-form" onSubmit={handleSubmit}>
@@ -48,14 +48,8 @@ export function VendedorCliente({ seller, onNewCustomer, onBack }) {
         <input type="tel" placeholder="Teléfono (opcional)" value={phone} onChange={e => setPhone(e.target.value)} />
       </div>
       <div className="seller-field">
-        <label>Barrio</label>
-        <input placeholder="Barrio (opcional)" value={neighborhood} onChange={e => setNeighborhood(e.target.value)} />
-      </div>
-      <div className="seller-field">
-        <label>Día de visita</label>
-        <select value={visitDay} onChange={e => setVisitDay(e.target.value)}>
-          {days.map((d, i) => <option key={i} value={i}>{d}</option>)}
-        </select>
+        <label>Observación</label>
+        <input placeholder="Nota u observación (opcional)" value={neighborhood} onChange={e => setNeighborhood(e.target.value)} />
       </div>
       <button className="primary seller-submit" type="submit" disabled={saving || !name.trim()}>
         {saving ? <span className="spinner" /> : <UserPlus size={18} />}

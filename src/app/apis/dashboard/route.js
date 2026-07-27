@@ -46,7 +46,7 @@ export async function GET() {
 
     const [totals] = await query(`
       SELECT
-        COALESCE((SELECT SUM(current_balance) FROM cobrokits.customers WHERE is_active = true), 0) AS total_portfolio,
+        COALESCE((SELECT SUM(current_balance) FROM cobrokits.customers WHERE is_active = true AND visit_day = $3), 0) AS total_portfolio,
         COALESCE((SELECT SUM(amount) FROM cobrokits.payments WHERE (paid_at AT TIME ZONE 'America/Bogota')::date = $1), 0) AS collected_today,
         COALESCE((SELECT SUM(amount) FROM cobrokits.payments WHERE (paid_at AT TIME ZONE 'America/Bogota')::date = $1 AND method = 'efectivo'), 0) AS cash_today,
         COALESCE((SELECT SUM(amount) FROM cobrokits.payments WHERE (paid_at AT TIME ZONE 'America/Bogota')::date = $1 AND method = 'nequi'), 0) AS nequi_today,
@@ -63,7 +63,7 @@ export async function GET() {
           WHERE (cv.visit_date AT TIME ZONE 'America/Bogota')::date = $1
         ), 0) AS investment_today,
         $2 AS collection_target_today
-    `, [today_date, collectionTarget[0]?.target_amount || 0]);
+    `, [today_date, collectionTarget[0]?.target_amount || 0, today_dow]);
 
     const sellers = await query(`
       SELECT
