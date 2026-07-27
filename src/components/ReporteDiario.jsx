@@ -57,7 +57,7 @@ const COLS = [
   { key: "dinero_a_entregar",   label: "$",                    type: "money",   editable: true,  desc: "Dinero que entrega el vendedor (lo ingresa el vendedor)" },
   { key: "ganancia",            label: "Ganancia",             type: "money",   editable: false, desc: "Cobros − Costo + Abono − Gasto", highlight: "profit" },
   { key: "d_merca",             label: "D/Merca",              type: "money",   editable: false, desc: "(Entrega + Total) − Costo Cli. − Cobros", highlight: "computed" },
-  { key: "d_dinero",            label: "D/Dinero",             type: "money",   editable: false, desc: "Efectivo + Gastos − Total", highlight: "computed" },
+  { key: "d_dinero",            label: "D/Dinero",             type: "money",   editable: false, desc: "$ + Gastos − Total", highlight: "computed" },
   { key: "clientes_abonaron",   label: "Cuentas",              type: "number",  editable: false, desc: "Clientes únicos que compraron o abonaron hoy" },
   { key: "canceladas",          label: "CNL",                   type: "number",  editable: false, desc: "Clientes que cancelaron su saldo (nuevo saldo = 0)" },
   { key: "total_units",         label: "Unid.",                 type: "number",  editable: false, desc: "Total unidades vendidas = Σ(cantidad)" },
@@ -122,7 +122,7 @@ export function ReporteDiario({ activeSellerId = "", activeSellerName = "Todos l
             abono_total: abono,
             entrega,
             d_merca: (entrega + abono) - n(s.costo_cliente) - n(s.suma_entrega),
-            d_dinero: n(s.m1_efectivo) + n(s.gasto) - abono,
+            d_dinero: n(s.dinero_a_entregar) + n(s.gasto) - abono,
           };
         }));
       }
@@ -134,6 +134,11 @@ export function ReporteDiario({ activeSellerId = "", activeSellerName = "Todos l
 
   useEffect(() => {
     loadDay(currentDate);
+  }, [loadDay, currentDate]);
+
+  useEffect(() => {
+    const interval = setInterval(() => { loadDay(currentDate); }, 15000);
+    return () => clearInterval(interval);
   }, [loadDay, currentDate]);
 
   function prevDay() { setCurrentDate(d => toISODate(addDays(parseDate(d), -1))); }

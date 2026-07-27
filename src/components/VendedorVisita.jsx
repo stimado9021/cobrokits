@@ -7,14 +7,13 @@ function fmt(v) { return money.format(Number(v || 0)); }
 export function VendedorVisita({ seller, customers = [], products = [], onVisit }) {
 
   const [customerId, setCustomerId] = useState("");
-  const [items, setItems] = useState([]);
-  const [productId, setProductId] = useState("");
-  const [quantity, setQuantity] = useState("");
+  const [deliveryQuantities, setDeliveryQuantities] = useState({});
   const [amount, setAmount] = useState("");
-  const [method, setMethod] = useState("");
+  const [method, setMethod] = useState("efectivo");
   const [notes, setNotes] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState("");
+  const [success, setSuccess] = useState("");
   const [stock, setStock] = useState({});
   const [loadingStock, setLoadingStock] = useState(true);
 
@@ -44,53 +43,69 @@ export function VendedorVisita({ seller, customers = [], products = [], onVisit 
     return () => { cancelled = true; };
   }, [seller.sellerId]);
 
-  function addItem() {
-    setError("");
-    if (!productId || !quantity || Number(quantity) <= 0) return;
-    const p = products.find(x => x.id === productId);
-    if (!p) return;
+  function updateDeliveryQty(productId, value) {
+    const qty = Number(value);
+    if (isNaN(qty) || qty <= 0) {
+      setDeliveryQuantities(prev => {
+        const next = { ...prev };
+        delete next[productId];
+        return next;
+      });
+      return;
+    }
     const available = stock[productId] ?? 0;
-    const inCart = items.find(x => x.product_id === productId)?.quantity ?? 0;
-    if (available <= 0) {
-      setError("No tienes stock disponible de este producto");
+    if (qty > available) {
+      setError(`Stock insuficiente: solo hay ${available} unidades`);
       return;
     }
-    if (inCart + Number(quantity) > available) {
-      setError(`Solo tienes ${available} unidades disponibles de ${p.name}`);
-      return;
-    }
-    setItems(prev => {
-      const existing = prev.find(x => x.product_id === productId);
-      if (existing) return prev.map(x => x.product_id === productId ? { ...x, quantity: x.quantity + Number(quantity) } : x);
-      return [...prev, { product_id: productId, quantity: Number(quantity), name: p.name, price: p.sale_price }];
-    });
-    setProductId("");
-    setQuantity("");
+    setError("");
+    setDeliveryQuantities(prev => ({ ...prev, [productId]: qty }));
   }
 
-  function removeItem(pid) {
-    setItems(prev => prev.filter(x => x.product_id !== pid));
-  }
+  const hasItems = Object.keys(deliveryQuantities).length > 0;
+  const canSubmit = customerId && (hasItems || (amount && Number(amount) > 0));
+
+  useEffect(() => {
+    if (!success) return;
+    const t = setTimeout(() => setSuccess(""), 5000);
+    return () => clearTimeout(t);
+  }, [success]);
 
   async function handleSubmit(e) {
     e.preventDefault();
     setError("");
-    if (submitting || !customerId || items.length === 0) return;
+    if (submitting || !canSubmit) return;
     setSubmitting(true);
     try {
+      const itemsPayload = Object.entries(deliveryQuantities).map(([product_id, quantity]) => {
+        const p = products.find(x => x.id === product_id);
+        return { product_id, quantity, name: p?.name || "" };
+      });
+
       await onVisit({
         seller_id: seller.sellerId,
         customer_id: customerId,
-        items: items.map(i => ({ product_id: i.product_id, quantity: i.quantity, name: i.name })),
+        items: itemsPayload,
         payment_amount: amount || 0,
         payment_method: method || null,
         notes: notes || null,
       });
       setCustomerId("");
-      setItems([]);
+      setDeliveryQuantities({});
       setAmount("");
-      setMethod("");
+      setMethod("efectivo");
       setNotes("");
+      setSuccess("Visita registrada con éxito");
+      const hoy = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Bogota" }).format(new Date());
+      const res = await fetch(`/apis/daily-stock?sellerId=${seller.sellerId}&stockDate=${hoy}`);
+      const data = await res.json();
+      if (data.success) {
+        const map = {};
+        for (const item of data.items) {
+          map[item.product_id] = Number(item.quantity_delivered) - Number(item.quantity_sold);
+        }
+        setStock(map);
+      }
     } catch (e) {
       setError(e.message);
     } finally {
@@ -98,7 +113,10 @@ export function VendedorVisita({ seller, customers = [], products = [], onVisit 
     }
   }
 
-  const totalSale = items.reduce((s, i) => s + i.quantity * Number(i.price), 0);
+  const totalSale = Object.entries(deliveryQuantities).reduce((s, [pid, qty]) => {
+    const p = products.find(x => x.id === pid);
+    return s + qty * Number(p?.sale_price || 0);
+  }, 0);
   const hasStock = Object.keys(stock).length > 0;
 
   return (
@@ -110,62 +128,112 @@ export function VendedorVisita({ seller, customers = [], products = [], onVisit 
         </div>
       )}
       {error && <div className="seller-notice-error">{error}</div>}
+      {success && <div className="seller-notice-success">{success}</div>}
       <form className="seller-form" onSubmit={handleSubmit}>
         <div className="seller-field">
           <label>Cliente</label>
           <select value={customerId} onChange={e => { setCustomerId(e.target.value); setError(""); }} required>
             <option value="">Selecciona cliente</option>
             {sellerCustomers.map(c => (
-              <option key={c.id} value={c.id}>{c.name} {c.current_balance > 0 ? `(${fmt(c.current_balance)})` : ''}</option>
+              <option key={c.id} value={c.id}>{c.name.toUpperCase()} {c.current_balance > 0 ? `(${fmt(c.current_balance)})` : ''}</option>
             ))}
           </select>
         </div>
 
-        <div className="seller-field">
-          <label>Productos</label>
-          <div className="seller-row">
-            <select value={productId} onChange={e => { setProductId(e.target.value); setError(""); }} style={{flex:1}}>
-              <option value="">Producto</option>
-              {products.filter(p => (stock[p.id] ?? 0) > 0).map(p => (
-                <option key={p.id} value={p.id}>{p.name} ({fmt(p.sale_price)}) — disp: {stock[p.id]}</option>
-              ))}
-            </select>
-            <input type="number" min="1" placeholder="Cant" value={quantity} onChange={e => setQuantity(e.target.value)} style={{width:'70px'}} />
-            <button type="button" className="primary" onClick={addItem} style={{padding:'0 12px',height:'42px',minWidth:'42px'}}><Plus size={20} /></button>
-          </div>
+        <div className="seller-field" style={{ overflowX: "auto", margin: "0 -16px", padding: "0 16px" }}>
+          <table className="dataTable" style={{ width: "100%", fontSize: "12px", borderCollapse: "collapse" }}>
+            <thead>
+              <tr>
+                <th style={{ padding: "4px 8px", textAlign: "left", fontSize: "11px", color: "var(--brand)", textTransform: "uppercase" }}>Producto</th>
+                <th style={{ padding: "4px 8px", textAlign: "center", fontSize: "11px", color: "var(--brand)", textTransform: "uppercase" }}>Stock</th>
+                <th style={{ padding: "4px 8px", textAlign: "center", fontSize: "11px", color: "var(--brand)", textTransform: "uppercase" }}>Cant.</th>
+              </tr>
+            </thead>
+            <tbody>
+              {products.map((p) => {
+                const available = stock[p.id] ?? 0;
+                const remaining = available - (deliveryQuantities[p.id] || 0);
+                return (
+                  <tr key={p.id}>
+                    <td style={{ padding: "6px 8px", fontSize: "12px", borderBottom: "1px solid var(--line-light)" }}>{p.name}</td>
+                    <td style={{ padding: "6px 8px", textAlign: "center", fontWeight: "bold", fontSize: "12px", borderBottom: "1px solid var(--line-light)", color: remaining < available ? "var(--red)" : undefined }}>{remaining}</td>
+                    <td style={{ padding: "6px 8px", textAlign: "center", borderBottom: "1px solid var(--line-light)" }}>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        placeholder="0"
+                        value={deliveryQuantities[p.id] || ""}
+                        onChange={(e) => updateDeliveryQty(p.id, e.target.value)}
+                        style={{ width: "60px", textAlign: "center", padding: "4px 6px", fontSize: "12px", minHeight: "28px", border: "1px solid var(--line)", borderRadius: "var(--r-sm)" }}
+                        disabled={remaining === 0 && !deliveryQuantities[p.id]}
+                      />
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
 
-        {items.length > 0 && (
-          <div className="seller-items">
-            {items.map(i => (
-              <div key={i.product_id} className="seller-item">
-                <span>{i.name} <strong>x{i.quantity}</strong> = {fmt(i.quantity * Number(i.price))}</span>
-                <button type="button" onClick={() => removeItem(i.product_id)} style={{background:'none',border:'none',color:'#ff4444',cursor:'pointer'}}><Trash2 size={16} /></button>
-              </div>
-            ))}
-            <div className="seller-total">Total: {fmt(totalSale)}</div>
+        {totalSale > 0 && (
+          <div className="seller-total" style={{textAlign:"right", padding:"10px 0", fontWeight:"bold"}}>
+            Total: {fmt(totalSale)}
           </div>
         )}
 
-        <div className="seller-field">
-          <label>Abono</label>
-          <input type="number" min="0" placeholder="$0" value={amount} onChange={e => setAmount(e.target.value)} />
-        </div>
-        <div className="seller-field">
-          <label>Método de pago</label>
-          <select value={method} onChange={e => setMethod(e.target.value)}>
-            <option value="">Selecciona</option>
-            <option value="efectivo">Efectivo</option>
-            <option value="nequi">Nequi</option>
-          </select>
+        <div className="seller-row" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px", alignItems: "center", marginBottom: "14px", marginTop: "14px" }}>
+          <input
+            type="number"
+            min="0"
+            placeholder="$ Abono"
+            value={amount}
+            onChange={(e) => setAmount(e.target.value)}
+            style={{ width: "100%", fontSize: "13px" }}
+          />
+          <div style={{ display: "flex", borderRadius: "var(--r-sm)", overflow: "hidden", border: "1px solid var(--brand)" }}>
+            <button
+              type="button"
+              onClick={() => setMethod("efectivo")}
+              style={{
+                flex: 1,
+                padding: "7px 0",
+                border: "none",
+                background: method === "efectivo" ? "var(--brand)" : "var(--surface-2)",
+                color: method === "efectivo" ? "#fff" : "var(--text-dim)",
+                cursor: "pointer",
+                fontSize: "12px",
+                fontWeight: method === "efectivo" ? "700" : "500",
+                transition: "all 0.25s",
+              }}
+            >
+              Efectivo
+            </button>
+            <div style={{ width: "1px", background: "var(--line)" }} />
+            <button
+              type="button"
+              onClick={() => setMethod("nequi")}
+              style={{
+                flex: 1,
+                padding: "7px 0",
+                border: "none",
+                background: method === "nequi" ? "var(--brand)" : "var(--surface-2)",
+                color: method === "nequi" ? "#fff" : "var(--text-dim)",
+                cursor: "pointer",
+                fontSize: "12px",
+                fontWeight: method === "nequi" ? "700" : "500",
+                transition: "all 0.25s",
+              }}
+            >
+              Nequi
+            </button>
+          </div>
         </div>
 
         <div className="seller-field">
-          <label>Observación</label>
           <input placeholder="Nota (opcional)" value={notes} onChange={e => setNotes(e.target.value)} />
         </div>
 
-        <button className="primary seller-submit" type="submit" disabled={submitting || !customerId || items.length === 0 || !hasStock}>
+        <button className="primary seller-submit" type="submit" disabled={submitting || !canSubmit}>
           {submitting ? <span className="spinner" /> : <MapPin size={18} />}
           {submitting ? "Guardando..." : "Registrar Visita"}
         </button>

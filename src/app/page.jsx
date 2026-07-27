@@ -37,6 +37,7 @@ import { Login } from "../components/Login";
 import { VendedorVisita } from "../components/VendedorVisita";
 import { VendedorCliente } from "../components/VendedorCliente";
 import { VendedorAjustes } from "../components/VendedorAjustes";
+import { VendedorVentas } from "../components/VendedorVentas";
 import { ErrorBoundary } from "../components/ErrorBoundary";
 
 const money = new Intl.NumberFormat("es-CO", {
@@ -139,6 +140,8 @@ export default function Home() {
       const vl = visitsData?.visits || [];
       setActiveSellerId((current) => {
         if (current) return current;
+        const stored = localStorage.getItem("activeSellerId");
+        if (stored && sl.some(s => s.id === stored)) return stored;
         const firstWithVisits = sl.find((s) => vl.some((v) => v.seller_id === s.id));
         return firstWithVisits?.id || sl[0]?.id || "";
       });
@@ -157,6 +160,8 @@ export default function Home() {
     if (storedSession) setSession(JSON.parse(storedSession));
     const storedTab = localStorage.getItem("activeTab");
     if (storedTab) setActiveTab(storedTab);
+    const storedSeller = localStorage.getItem("activeSellerId");
+    if (storedSeller) setActiveSellerId(storedSeller);
     setHydrated(true);
   }, []);
 
@@ -189,6 +194,26 @@ export default function Home() {
   useEffect(() => {
     if (session) localStorage.setItem("activeTab", activeTab);
   }, [activeTab, session]);
+
+  useEffect(() => {
+    if (activeSellerId) localStorage.setItem("activeSellerId", activeSellerId);
+  }, [activeSellerId]);
+
+  useEffect(() => {
+    if (!session || session.role === "seller") return;
+    const interval = setInterval(() => {
+      Promise.allSettled([
+        api("/apis/visits"),
+        api("/apis/dashboard"),
+        api("/apis/inventory"),
+      ]).then(([visitsRes, dashRes, invRes]) => {
+        if (visitsRes.status === "fulfilled" && visitsRes.value?.visits) setVisits(visitsRes.value.visits);
+        if (dashRes.status === "fulfilled") setDashboard(dashRes.value);
+        if (invRes.status === "fulfilled" && invRes.value?.inventory) setInventory(invRes.value.inventory);
+      }).catch(() => {});
+    }, 10000);
+    return () => clearInterval(interval);
+  }, [session]);
 
   async function createSeller(event) {
     event.preventDefault();
@@ -374,6 +399,7 @@ export default function Home() {
   function doLogout() {
     localStorage.removeItem("session");
     setSession(null);
+    loadAll();
   }
 
   // ====== HYDRATING / NOT READY ======
@@ -404,7 +430,7 @@ export default function Home() {
       <div className="seller-shell">
         <header className="seller-header">
           <div>
-            <strong>{session.sellerName}</strong>
+            <strong style={{ textTransform: "uppercase" }}>{session.sellerName}</strong>
             <span>{sellerCustomers.length} clientes</span>
             <span className="seller-abonos">Abonos: {formatMoney(abonosHoy)}</span>
           </div>
@@ -434,10 +460,18 @@ export default function Home() {
             <VendedorCliente
               seller={session}
               onNewCustomer={sellerCreateCustomer}
+              onBack={() => setSellerTab("clientes")}
             />
           )}
           {sellerTab === "ajustes" && (
             <VendedorAjustes seller={session} />
+          )}
+          {sellerTab === "ventas" && (
+            <VendedorVentas
+              seller={session}
+              visits={visits}
+              onRefresh={loadAll}
+            />
           )}
           {sellerTab === "visita" && (
             <VendedorVisita
@@ -457,7 +491,7 @@ export default function Home() {
               ) : (
                 sellerCustomers.map(c => (
                   <div key={c.id} className="seller-client-card">
-                    <div className="seller-client-name">{c.name}</div>
+                    <div className="seller-client-name" style={{ textTransform: "uppercase" }}>{c.name}</div>
                     <div className="seller-client-info">{c.address} · {c.phone || 'Sin teléfono'}</div>
                     <div className="seller-client-balance">
                       Saldo: <strong>{formatMoney(c.current_balance)}</strong>
@@ -472,6 +506,9 @@ export default function Home() {
         <nav className="seller-bottom-nav">
           <button className={`seller-bottom-tab ${sellerTab === 'visita' ? 'active' : ''}`} onClick={() => setSellerTab('visita')}>
             <MapPin size={22} /><span>Visita</span>
+          </button>
+          <button className={`seller-bottom-tab ${sellerTab === 'ventas' ? 'active' : ''}`} onClick={() => setSellerTab('ventas')}>
+            <CreditCard size={22} /><span>Ventas</span>
           </button>
           <button className={`seller-bottom-tab ${sellerTab === 'clientes' || sellerTab === 'nuevo-cliente' ? 'active' : ''}`} onClick={() => setSellerTab('clientes')}>
             <Users size={22} /><span>Clientes</span>
@@ -558,10 +595,10 @@ export default function Home() {
               </select>
             </label>
             <div className="sideStats">
-              <span>Cartera</span>
-              <strong>{formatMoney(totals.total_portfolio)}</strong>
-              <span>Recaudo hoy</span>
-              <strong>{formatMoney(totals.collected_today)}</strong>
+              <span title="Suma del saldo actual de los clientes que se deben visitar hoy">Cartera</span>
+              <strong title="Suma del saldo actual de los clientes que se deben visitar hoy">{formatMoney(totals.total_portfolio)}</strong>
+              <span title="Suma de todos los abonos recibidos en el día de hoy">Recaudo hoy</span>
+              <strong title="Suma de todos los abonos recibidos en el día de hoy">{formatMoney(totals.collected_today)}</strong>
             </div>
           </>
         )}

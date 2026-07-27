@@ -85,7 +85,7 @@ const ROWS = [
   { key: "dinero_a_entregar",   label: "$",                    type: "money",   editable: true,  desc: "Dinero que entrega el vendedor (lo ingresa el vendedor)" },
   { key: "ganancia",            label: "Ganancia",             type: "money",   editable: false, desc: "Entrega − Inversión + Abono − Gasto", highlight: "profit" },
   { key: "d_merca",             label: "D/Merca",              type: "money",   editable: false, desc: "(Entrega + Total) − Costo Cli. − Cobros", highlight: "computed" },
-  { key: "d_dinero",            label: "D/Dinero",             type: "money",   editable: false, desc: "Efectivo + Gastos − Total", highlight: "computed" },
+  { key: "d_dinero",            label: "D/Dinero",             type: "money",   editable: false, desc: "$ + Gastos − Total", highlight: "computed" },
   { key: "clientes_abonaron",   label: "Cuentas",              type: "number",  editable: false, desc: "Clientes únicos que compraron o abonaron hoy" },
   { key: "clientes_no_llevaron",label: "CNL",                  type: "number",  editable: false, desc: "Clientes que cancelaron su saldo (nuevo saldo = 0)" },
   { key: "visitas_totales",     label: "Unid.",                type: "number",  editable: false, desc: "Total unidades vendidas = Σ(cantidad)" },
@@ -143,7 +143,7 @@ export function ReportesSemanales({ activeSellerId = "", activeSellerName = "Tod
           const totalRecaudo = n(d.m1_efectivo) + n(d.m2_nequi);
           const entrega = n(d.saldo_anterior) + n(d.suma_entrega) - totalRecaudo;
           const dMerca = (entrega + totalRecaudo) - n(d.costo_cliente) - n(d.suma_entrega);
-          const dDinero = n(d.m1_efectivo) + n(d.gasto) - totalRecaudo;
+          const dDinero = n(d.dinero_a_entregar) + n(d.gasto) - totalRecaudo;
           return { ...d, total_recaudo: totalRecaudo, entrega, d_merca: dMerca, d_dinero: dDinero };
         }));
       }
@@ -155,6 +155,11 @@ export function ReportesSemanales({ activeSellerId = "", activeSellerName = "Tod
 
   useEffect(() => {
     loadWeek(weekStart);
+  }, [loadWeek, weekStart]);
+
+  useEffect(() => {
+    const interval = setInterval(() => { loadWeek(weekStart); }, 15000);
+    return () => clearInterval(interval);
   }, [loadWeek, weekStart]);
 
   function prevWeek() { setWeekStart(w => addDays(w, -7)); }

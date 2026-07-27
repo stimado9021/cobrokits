@@ -23,10 +23,7 @@ export function EntregarInventario({
   const [viewDate, setViewDate] = useState(todayDate);
   const [availableDates, setAvailableDates] = useState([]);
 
-  // Delivery form state (local)
-  const [deliveryProductId, setDeliveryProductId] = useState("");
-  const [deliveryQuantity, setDeliveryQuantity] = useState("");
-  const [deliveryItems, setDeliveryItems] = useState([]);
+  const [deliveryQuantities, setDeliveryQuantities] = useState({});
   const [deliveryError, setDeliveryError] = useState("");
   const [generatingPdf, setGeneratingPdf] = useState(false);
   const [generatingExcel, setGeneratingExcel] = useState(false);
@@ -37,9 +34,7 @@ export function EntregarInventario({
 
   // Reset delivery form when seller changes
   useEffect(() => {
-    setDeliveryItems([]);
-    setDeliveryProductId("");
-    setDeliveryQuantity("");
+    setDeliveryQuantities({});
     setDeliveryError("");
     setCloseResult(null);
   }, [selectedSellerId]);
@@ -76,6 +71,16 @@ export function EntregarInventario({
     return () => { cancelled = true; };
   }, []);
 
+  useEffect(() => {
+    const interval = setInterval(() => {
+      fetch("/apis/general-stock")
+        .then(r => r.json())
+        .then(data => { if (data.success) setWarehouseStock(data.inventory || []); })
+        .catch(() => {});
+    }, 15000);
+    return () => clearInterval(interval);
+  }, []);
+
   // ─── Load daily stock for the selected date ───────
   useEffect(() => {
     if (!selectedSellerId) { setDailyItems([]); return; }
@@ -91,6 +96,17 @@ export function EntregarInventario({
     return () => { cancelled = true; };
   }, [selectedSellerId, viewDate]);
 
+  useEffect(() => {
+    if (!selectedSellerId) return;
+    const interval = setInterval(() => {
+      fetch(`/apis/daily-stock?sellerId=${selectedSellerId}&stockDate=${viewDate}`)
+        .then(r => r.json())
+        .then(data => { if (data.success) setDailyItems(data.items || []); })
+        .catch(() => {});
+    }, 15000);
+    return () => clearInterval(interval);
+  }, [selectedSellerId, viewDate]);
+
   const whMap = useMemo(() => {
     const map = {};
     warehouseStock.forEach((i) => { map[i.id] = Number(i.quantity); });
@@ -103,11 +119,11 @@ export function EntregarInventario({
   // ─── Effective warehouse stock = on-hand minus queued items ────
   const effectiveWhMap = useMemo(() => {
     const map = { ...whMap };
-    deliveryItems.forEach(item => {
-      map[item.product_id] = Math.max(0, (map[item.product_id] || 0) - item.quantity);
+    Object.entries(deliveryQuantities).forEach(([product_id, quantity]) => {
+      map[product_id] = Math.max(0, (map[product_id] || 0) - quantity);
     });
     return map;
-  }, [whMap, deliveryItems]);
+  }, [whMap, deliveryQuantities]);
 
   // ─── Daily rows (deduplicated by product) ────────
   const dailyRows = useMemo(() => {
@@ -135,46 +151,39 @@ export function EntregarInventario({
   const ventaVendido = useMemo(() => dailyRows.reduce((sum, r) => sum + (r.sold * r.sale_price), 0), [dailyRows]);
 
   // ─── Delivery form handlers ───────────────────────
-  function addDeliveryItem() {
-    if (!deliveryProductId || !deliveryQuantity) return;
-    const qty = Number(deliveryQuantity);
-    if (qty <= 0) return;
-
-    const available = effectiveWhMap[deliveryProductId] || 0;
-    if (qty > available) {
-      setDeliveryError(`Solo hay ${available} unidades en bodega`);
+  function updateDeliveryQty(productId, value) {
+    const qty = Number(value);
+    if (isNaN(qty) || qty <= 0) {
+      setDeliveryQuantities(prev => {
+        const next = { ...prev };
+        delete next[productId];
+        return next;
+      });
       return;
     }
-
-    const product = products.find(p => p.id === deliveryProductId);
-    if (!product) return;
-
-    setDeliveryItems(prev => {
-      const existing = prev.find(i => i.product_id === deliveryProductId);
-      if (existing) {
-        const newQty = existing.quantity + qty;
-        if (newQty > available) {
-          setDeliveryError(`Solo hay ${available} unidades en bodega`);
-          return prev;
-        }
-        return prev.map(i => i.product_id === deliveryProductId ? { ...i, quantity: newQty } : i);
-      }
-      return [...prev, { product_id: deliveryProductId, name: product.name, quantity: qty }];
-    });
-    setDeliveryProductId("");
-    setDeliveryQuantity("");
+    const available = effectiveWhMap[productId] ?? 0;
+    if (qty > available) {
+      setDeliveryError(`Stock insuficiente: solo hay ${available} unidades de "${products.find(p => p.id === productId)?.name}"`);
+      setDeliveryQuantities(prev => {
+        const next = { ...prev };
+        delete next[productId];
+        return next;
+      });
+      return;
+    }
     setDeliveryError("");
-  }
-
-  function removeDeliveryItem(productId) {
-    setDeliveryItems(prev => prev.filter(i => i.product_id !== productId));
+    setDeliveryQuantities(prev => ({ ...prev, [productId]: qty }));
   }
 
   async function handleDeliver(event) {
     event.preventDefault();
-    if (submitting || !selectedSellerId || deliveryItems.length === 0) return;
+    if (submitting || !selectedSellerId || Object.keys(deliveryQuantities).length === 0) return;
     setSubmitting(true);
     setDeliveryError("");
+    const items = Object.entries(deliveryQuantities).map(([product_id, quantity]) => {
+      const product = products.find(p => p.id === product_id);
+      return { product_id, name: product?.name || "", quantity };
+    });
     try {
       const res = await fetch("/apis/daily-stock", {
         method: "POST",
@@ -183,14 +192,12 @@ export function EntregarInventario({
           action: "deliver_batch",
           seller_id: selectedSellerId,
           stock_date: todayDate,
-          items: deliveryItems.map(i => ({ product_id: i.product_id, quantity: i.quantity })),
+          items: items.map(i => ({ product_id: i.product_id, quantity: i.quantity })),
         }),
       });
       const data = await res.json();
       if (data.success) {
-        setDeliveryItems([]);
-        setDeliveryProductId("");
-        setDeliveryQuantity("");
+        setDeliveryQuantities({});
         // Reload daily stock for today
         const dsRes = await fetch(`/apis/daily-stock?sellerId=${selectedSellerId}&stockDate=${todayDate}`);
         const dsData = await dsRes.json();
@@ -444,46 +451,43 @@ export function EntregarInventario({
             <option key={seller.id} value={seller.id}>{seller.name}</option>
           ))}
         </select>
-        <div className="row">
-          <select
-            value={deliveryProductId}
-            onChange={(e) => { setDeliveryProductId(e.target.value); setDeliveryError(""); }}
-          >
-            <option value="">Producto</option>
-            {products
-              .filter((p) => (effectiveWhMap[p.id] ?? 0) > 0)
-              .map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name} (bodega: {effectiveWhMap[p.id]} uds)
-                </option>
-              ))}
-          </select>
-          <input
-            value={deliveryQuantity}
-            onChange={(e) => setDeliveryQuantity(e.target.value)}
-            type="number"
-            min="1"
-            placeholder="Cant."
-            style={{ width: "70px" }}
-          />
-          <button type="button" className="iconButton" onClick={addDeliveryItem} title="Agregar" disabled={busy || !deliveryProductId}>
-            <PackagePlus size={18} />
-          </button>
+        <div className="row" style={{ overflowX: "auto" }}>
+          <table className="dataTable" style={{ width: "100%", fontSize: "12px", borderCollapse: "collapse" }}>
+            <thead>
+              <tr>
+                <th style={{ padding: "4px 8px", textAlign: "left", fontSize: "11px" }}>Producto</th>
+                <th style={{ padding: "4px 8px", textAlign: "center", fontSize: "11px" }}>Stock</th>
+                <th style={{ padding: "4px 8px", textAlign: "center", fontSize: "11px" }}>Cant.</th>
+              </tr>
+            </thead>
+            <tbody>
+              {products.map((p) => {
+                const stock = effectiveWhMap[p.id] ?? 0;
+                return (
+                  <tr key={p.id}>
+                    <td style={{ padding: "3px 8px", fontSize: "12px" }}>{p.name}</td>
+                    <td style={{ padding: "3px 8px", textAlign: "center", fontWeight: "bold", fontSize: "12px" }}>{stock}</td>
+                    <td style={{ padding: "3px 8px", textAlign: "center" }}>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        placeholder="0"
+                        value={deliveryQuantities[p.id] || ""}
+                        onChange={(e) => updateDeliveryQty(p.id, e.target.value)}
+                        style={{ width: "60px", textAlign: "center", padding: "3px 6px", fontSize: "12px", minHeight: "28px" }}
+                        disabled={stock === 0}
+                      />
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
         </div>
         {deliveryError && (
           <p style={{ fontSize: "12px", color: "var(--red)", margin: "4px 0" }}>{deliveryError}</p>
         )}
-        {deliveryItems.length > 0 && (
-          <div className="pending-items">
-            {deliveryItems.map((item) => (
-              <div key={item.product_id} className="pending-item">
-                <span>{item.quantity}x {item.name}</span>
-                <button type="button" onClick={() => removeDeliveryItem(item.product_id)} className="text-danger-button">x</button>
-              </div>
-            ))}
-          </div>
-        )}
-        <button className="primary" type="submit" disabled={busy || !isToday || deliveryItems.length === 0}>
+        <button className="primary" type="submit" disabled={busy || !isToday || Object.keys(deliveryQuantities).length === 0}>
           {submitting ? <span className="spinner" /> : <PackagePlus size={17} />}
           {submitting ? "Entregando..." : "Entregar"}
         </button>

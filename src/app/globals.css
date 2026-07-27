@@ -558,7 +558,7 @@ select:disabled {
 }
 
 /* ═══════════════════════════════════════════════════
-   BUTTONS
+    BUTTONS
 ═══════════════════════════════════════════════════ */
 .primary,
 .iconButton {
@@ -2173,6 +2173,17 @@ select:disabled {
   border: 1px solid rgba(239, 68, 68, 0.25);
   border-radius: var(--r-sm);
   color: var(--red);
+  font-size: 0.82rem;
+  animation: noticeIn 0.25s ease-out;
+}
+
+.seller-notice-success {
+  margin: 12px 18px 0;
+  padding: 12px 14px;
+  background: #D1FAE5;
+  border: 1px solid rgba(16, 185, 129, 0.25);
+  border-radius: var(--r-sm);
+  color: #065F46;
   font-size: 0.82rem;
   animation: noticeIn 0.25s ease-out;
 }

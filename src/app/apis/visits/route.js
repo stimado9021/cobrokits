@@ -74,3 +74,67 @@ export async function POST(request) {
     return fail(error);
   }
 }
+
+export async function PATCH(request) {
+  try {
+    const body = await request.json();
+    if (!body.id) return fail(new Error("ID de visita requerido"), 400);
+    if (typeof body.is_paid !== "boolean") return fail(new Error("Estado is_paid requerido"), 400);
+
+    await query("UPDATE cobrokits.customer_visits SET is_paid = $1 WHERE id = $2", [body.is_paid, body.id]);
+    return ok({ success: true });
+  } catch (error) {
+    return fail(error, 500);
+  }
+}
+
+export async function DELETE(request) {
+  try {
+    const { searchParams } = new URL(request.url);
+    const id = searchParams.get("id");
+    if (!id) return fail(new Error("ID de visita requerido"), 400);
+
+    const [visit] = await query("SELECT * FROM cobrokits.customer_visits WHERE id = $1", [id]);
+    if (!visit) return fail(new Error("Visita no encontrada"), 404);
+
+    const [closed] = await query(
+      "SELECT is_closed FROM cobrokits.daily_seller_stock WHERE seller_id = $1 AND stock_date = $2 LIMIT 1",
+      [visit.seller_id, visit.visit_date]
+    );
+    if (closed?.is_closed) return fail(new Error("El día ya está cerrado, no se puede eliminar"), 400);
+
+    await query(`
+      DO $$
+      DECLARE
+        v_item RECORD;
+      BEGIN
+        UPDATE cobrokits.customers 
+        SET current_balance = current_balance - ($1::numeric - $2::numeric)
+        WHERE id = $3::uuid;
+
+        FOR v_item IN SELECT * FROM cobrokits.customer_visit_items WHERE visit_id = $4::uuid LOOP
+          UPDATE cobrokits.daily_seller_stock
+          SET quantity_sold = quantity_sold - v_item.quantity
+          WHERE seller_id = $5::uuid AND product_id = v_item.product_id AND stock_date = $6::date;
+          
+          DELETE FROM cobrokits.inventory_movements
+          WHERE id IN (
+            SELECT id FROM cobrokits.inventory_movements
+            WHERE seller_id = $5::uuid AND customer_id = $3::uuid AND product_id = v_item.product_id 
+              AND quantity = v_item.quantity AND movement_type = 'venta_credito_cliente' 
+              AND DATE(created_at) = $6::date
+            LIMIT 1
+          );
+        END LOOP;
+
+        DELETE FROM cobrokits.payments WHERE visit_id = $4::uuid;
+        DELETE FROM cobrokits.customer_visit_items WHERE visit_id = $4::uuid;
+        DELETE FROM cobrokits.customer_visits WHERE id = $4::uuid;
+      END $$;
+    `, [visit.new_balance, visit.previous_balance, visit.customer_id, id, visit.seller_id, visit.visit_date]);
+
+    return ok({ success: true });
+  } catch (error) {
+    return fail(error, 500);
+  }
+}
