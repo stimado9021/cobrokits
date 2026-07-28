@@ -70,7 +70,9 @@ async function api(path, options, { queueOffline = false } = {}) {
 export default function Home() {
   const [session, setSession] = useState(null);
   const [hydrated, setHydrated] = useState(false);
-  const [sellerTab, setSellerTab] = useState("visita");
+   const [sellerTab, setSellerTab] = useState(() => {
+     try { return localStorage.getItem("sellerTab") || "visita"; } catch { return "visita"; }
+   });
   const [isOffline, setIsOffline] = useState(false);
   const [pendingOps, setPendingOps] = useState(0);
 
@@ -191,11 +193,15 @@ export default function Home() {
     api("/apis/daily-stock", { method: "POST", body: JSON.stringify({ action: "auto_close" }) }).catch(() => {});
   }, []);
 
-  useEffect(() => {
-    if (session) localStorage.setItem("activeTab", activeTab);
-  }, [activeTab, session]);
+   useEffect(() => {
+     if (session) localStorage.setItem("activeTab", activeTab);
+   }, [activeTab, session]);
 
-  useEffect(() => {
+   useEffect(() => {
+     localStorage.setItem("sellerTab", sellerTab);
+   }, [sellerTab]);
+
+   useEffect(() => {
     if (activeSellerId) localStorage.setItem("activeSellerId", activeSellerId);
   }, [activeSellerId]);
 
@@ -416,16 +422,86 @@ export default function Home() {
     return <Login onLogin={doLogin} sellers={sellers} />;
   }
 
-  // ====== SELLER VIEW (MOBILE) ======
-  if (session.role === "seller") {
-    const sellerCustomers = customers.filter(c => c.seller_id === session.sellerId);
-    const hoy = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Bogota" }).format(new Date());
-    const abonosHoy = visits
-      .filter(v => v.seller_id === session.sellerId && v.visit_date?.startsWith(hoy))
-      .reduce((s, v) => s + Number(v.payment_amount || 0), 0);
-    const handleSync = async () => { try { await syncPending(); } catch {} };
+   // ====== SELLER VIEW (MOBILE) ======
+   if (session.role === "seller") {
+      const todayDow = hoyColombiaDow();
+      const sellerCustomers = customers.filter(c => c.seller_id === session.sellerId && c.visit_day === todayDow);
+      const hoy = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Bogota" }).format(new Date());
+      const abonosHoy = visits
+        .filter(v => v.seller_id === session.sellerId && v.visit_date?.startsWith(hoy))
+        .reduce((s, v) => s + Number(v.payment_amount || 0), 0);
+      const handleSync = async () => { try { await syncPending(); } catch {} };
 
-    return (
+       if (loading) {
+         return (
+           <div className="seller-viewport">
+           <div className="seller-shell">
+             <header className="seller-header">
+               <div>
+                 <strong style={{ textTransform: "uppercase" }}>{session.sellerName}</strong>
+                 <span>Cargando...</span>
+               </div>
+               <div className="seller-header-actions">
+                 {isOffline && <span className="seller-offline-badge"><CloudOff size={16} /></span>}
+                 <button className="seller-logout" onClick={doLogout}><LogOut size={20} /></button>
+               </div>
+             </header>
+             <div className="seller-content">
+               {sellerTab === "visita" && (
+                 <div className="skel-section" style={{flexDirection:"column",gap:12}}>
+                   <div className="skel skel-line-lg" style={{width:"60%"}} />
+                   <div className="skel skel-line" />
+                   <div className="skel skel-line" />
+                   <div className="skel skel-line" />
+                   <div className="skel skel-line" />
+                   <div className="skel skel-line" />
+                   <div className="skel skel-line" />
+                   <div className="skel" style={{height:"40px",width:"100%",borderRadius:"var(--r-sm)"}} />
+                 </div>
+               )}
+               {sellerTab === "clientes" && (
+                 <div style={{display:"flex",flexDirection:"column",gap:8,padding:"8px 0"}}>
+                   {[1,2,3,4,5].map(i => (
+                     <div key={i} className="skel" style={{height:72,borderRadius:"var(--r-md)"}} />
+                   ))}
+                 </div>
+               )}
+               {sellerTab === "ventas" && (
+                 <div className="skel-section" style={{flexDirection:"column",gap:8}}>
+                   {[1,2,3,4,5].map(i => (
+                     <div key={i} className="skel skel-row" />
+                   ))}
+                 </div>
+               )}
+               {sellerTab === "ajustes" && (
+                 <div className="skel-section" style={{flexDirection:"column",gap:12}}>
+                   <div className="skel skel-line-lg" style={{width:"40%"}} />
+                   <div className="skel" style={{height:40}} />
+                   <div className="skel" style={{height:40}} />
+                   <div className="skel" style={{height:40}} />
+                 </div>
+               )}
+             </div>
+             <nav className="seller-bottom-nav">
+               <button className={`seller-bottom-tab ${sellerTab === 'visita' ? 'active' : ''}`} onClick={() => setSellerTab('visita')}>
+                 <MapPin size={22} /><span>Visita</span>
+               </button>
+               <button className={`seller-bottom-tab ${sellerTab === 'ventas' ? 'active' : ''}`} onClick={() => setSellerTab('ventas')}>
+                 <CreditCard size={22} /><span>Ventas</span>
+               </button>
+               <button className={`seller-bottom-tab ${sellerTab === 'clientes' || sellerTab === 'nuevo-cliente' ? 'active' : ''}`} onClick={() => setSellerTab('clientes')}>
+                 <Users size={22} /><span>Clientes</span>
+               </button>
+               <button className={`seller-bottom-tab ${sellerTab === 'ajustes' ? 'active' : ''}`} onClick={() => setSellerTab('ajustes')}>
+                 <Settings size={22} /><span>Ajustes</span>
+               </button>
+             </nav>
+           </div>
+           </div>
+         );
+       }
+
+      return (
       <div className="seller-viewport">
       <div className="seller-shell">
         <header className="seller-header">

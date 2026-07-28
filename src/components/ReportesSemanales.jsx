@@ -277,7 +277,7 @@ export function ReportesSemanales({ activeSellerId = "", activeSellerName = "Tod
     if (row.type === "money_signed") return moneyColored(rawVal);
     if (row.key === "ganancia") {
       const v = n(rawVal);
-      return <strong className={v > 0 ? "gain-positive" : v < 0 ? "gain-negative" : "empty"} title={t}>{money(rawVal)}</strong>;
+      return <strong className={v > 0 ? "gain-positive" : "gain-negative"} title={t}>{money(rawVal)}</strong>;
     }
     return <span className={n(rawVal) > 0 ? "positive" : "empty"} title={t}>{money(rawVal)}</span>;
   }
@@ -297,7 +297,7 @@ export function ReportesSemanales({ activeSellerId = "", activeSellerName = "Tod
     if (row.type === "percent") return <span title={t}>{n(val) ? `${Math.round(n(val) / 7)}%` : "–"}</span>;
     if (row.key === "ganancia") {
       const v = n(val);
-      return <strong className={v > 0 ? "gain-positive" : v < 0 ? "gain-negative" : "empty"} title={t}>{money(val)}</strong>;
+      return <strong className={v > 0 ? "gain-positive" : "gain-negative"} title={t}>{money(val)}</strong>;
     }
     return <span className={n(val) > 0 ? "positive" : "empty"} title={t}>{money(val)}</span>;
   }
@@ -370,7 +370,7 @@ export function ReportesSemanales({ activeSellerId = "", activeSellerName = "Tod
           else display = formatMoneyPdf(val);
 
           const isGain = col.key === "ganancia";
-          const color = isGain ? (n(val) > 0 ? "#16a34a" : n(val) < 0 ? "#dc2626" : "#999") : "#1a1a1a";
+           const color = isGain ? (n(val) > 0 ? "#16a34a" : "#dc2626") : "#1a1a1a";
           const weight = isGain || col.key === "dinero_a_entregar" ? "bold" : "normal";
           const align = col.type === "label" ? "left" : "center";
 
@@ -458,8 +458,8 @@ export function ReportesSemanales({ activeSellerId = "", activeSellerName = "Tod
           td { padding: 5px 8px; border: 1px solid #d1d5db; text-align: center; }
           .label { text-align: left; font-weight: bold; }
           .total { background: #7c3aed; color: #fff; font-weight: bold; }
-          .gain { color: #16a34a; }
-          .gain-neg { color: #dc2626; }
+          .gain-positive { color: #16a34a; }
+          .gain-negative { color: #dc2626; }
         </style></head><body>
         <h2 style="font-family:Arial;color:#7c3aed;">CobroKits - Reporte Semanal</h2>
         <p style="font-family:Arial;font-size:12px;">${weekLabel} · Vendedor: ${activeSellerName}</p>
@@ -482,7 +482,7 @@ export function ReportesSemanales({ activeSellerId = "", activeSellerName = "Tod
           else {
             const v = n(val);
             display = v ? `$${Number(v).toLocaleString("es-CO")}` : "–";
-            if (col.key === "ganancia") cls = v > 0 ? "gain" : v < 0 ? "gain-neg" : "";
+            if (col.key === "ganancia") cls = v > 0 ? "gain-positive" : "gain-negative";
           }
           html += `<td class="${cls}">${display}</td>`;
         });

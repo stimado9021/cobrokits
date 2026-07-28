@@ -4,6 +4,11 @@ import { MapPin, Plus, Trash2, AlertCircle } from "lucide-react";
 const money = new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 });
 function fmt(v) { return money.format(Number(v || 0)); }
 
+function hoyColombiaDow() {
+  const d = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Bogota" }));
+  return d.getDay();
+}
+
 export function VendedorVisita({ seller, customers = [], products = [], onVisit }) {
 
   const [customerId, setCustomerId] = useState("");
@@ -17,7 +22,8 @@ export function VendedorVisita({ seller, customers = [], products = [], onVisit 
   const [stock, setStock] = useState({});
   const [loadingStock, setLoadingStock] = useState(true);
 
-  const sellerCustomers = customers.filter(c => c.seller_id === seller.sellerId);
+  const todayDow = hoyColombiaDow();
+  const sellerCustomers = customers.filter(c => c.seller_id === seller.sellerId && c.visit_day === todayDow);
 
   useEffect(() => {
     let cancelled = false;

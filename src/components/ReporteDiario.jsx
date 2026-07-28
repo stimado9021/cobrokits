@@ -258,13 +258,13 @@ export function ReporteDiario({ activeSellerId = "", activeSellerName = "Todos l
     const t = cellTitle(col, rawVal);
     if (col.type === "number") return <span title={t}>{val || "–"}</span>;
     if (col.type === "percent") return <span title={t}>{val ? `${val}%` : "–"}</span>;
-    if (col.key === "ganancia") {
-      return <strong className={val > 0 ? "gain-positive" : val < 0 ? "gain-negative" : "empty"} title={t}>{money(val)}</strong>;
-    }
-    if (col.highlight === "computed") {
-      return <span className={val !== 0 ? "positive" : "empty"} title={t}>{money(val)}</span>;
-    }
-    return <span className={val > 0 ? "positive" : "empty"} title={t}>{money(val)}</span>;
+     if (col.key === "ganancia") {
+       return <strong className={val > 0 ? "gain-positive" : "gain-negative"} title={t}>{money(val)}</strong>;
+     }
+     if (col.highlight === "computed") {
+       return <span className={val !== 0 ? "positive" : "empty"} title={t}>{money(val)}</span>;
+     }
+     return <span className={val > 0 ? "positive" : "empty"} title={t}>{money(val)}</span>;
   }
 
   function renderTotalCell(col) {
@@ -273,7 +273,7 @@ export function ReporteDiario({ activeSellerId = "", activeSellerName = "Todos l
     if (col.type === "number") return <span title={t}>{val || "–"}</span>;
     if (col.type === "percent") return <span title={t}>{val ? `${Math.round(val / Math.max(sellers.length, 1))}%` : "–"}</span>;
     if (col.key === "ganancia") {
-      return <strong className={val > 0 ? "gain-positive" : val < 0 ? "gain-negative" : "empty"} title={t}>{money(val)}</strong>;
+      return <strong className={val > 0 ? "gain-positive" : "gain-negative"} title={t}>{money(val)}</strong>;
     }
     return <span className={val > 0 ? "positive" : "empty"} title={t}>{money(val)}</span>;
   }
@@ -325,7 +325,7 @@ export function ReporteDiario({ activeSellerId = "", activeSellerName = "Todos l
 
           const isGain = col.key === "ganancia";
           const isComputed = ["entrega", "d_merca", "d_dinero"].includes(col.key);
-          const color = isGain ? (n(val) > 0 ? "#16a34a" : n(val) < 0 ? "#dc2626" : "#999") : isComputed ? (n(val) !== 0 ? "#1a1a1a" : "#999") : "#1a1a1a";
+           const color = isGain ? (n(val) > 0 ? "#16a34a" : "#dc2626") : isComputed ? (n(val) !== 0 ? "#1a1a1a" : "#999") : "#1a1a1a";
           const weight = isGain || col.key === "dinero_a_entregar" ? "bold" : "normal";
           const align = col.type === "label" ? "left" : "center";
 
@@ -404,8 +404,8 @@ export function ReporteDiario({ activeSellerId = "", activeSellerName = "Todos l
           td { padding: 5px 8px; border: 1px solid #d1d5db; text-align: center; }
           .label { text-align: left; font-weight: bold; }
           .total { background: #7c3aed; color: #fff; font-weight: bold; }
-          .gain { color: #16a34a; }
-          .gain-neg { color: #dc2626; }
+          .gain-positive { color: #16a34a; }
+          .gain-negative { color: #dc2626; }
           .computed { font-weight: bold; color: #1a1a1a; }
         </style></head><body>
         <h2 style="font-family:Arial;color:#7c3aed;">CobroKits - Reporte Diario</h2>
@@ -428,7 +428,7 @@ export function ReporteDiario({ activeSellerId = "", activeSellerName = "Todos l
           else {
             const v = n(val);
             display = v ? `$${Number(v).toLocaleString("es-CO")}` : "–";
-            if (col.key === "ganancia") cls = v > 0 ? "gain" : v < 0 ? "gain-neg" : "";
+            if (col.key === "ganancia") cls = v > 0 ? "gain-positive" : "gain-negative";
           }
           html += `<td class="${cls}">${display}</td>`;
         });
