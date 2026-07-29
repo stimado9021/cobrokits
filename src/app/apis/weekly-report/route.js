@@ -154,14 +154,12 @@ export async function GET(request) {
         COALESCE(dm.cnt_notes, '')                               AS cnt_notes,
         -- Saldo anterior: manual override if provided, otherwise calculated from 7 days ago
         COALESCE(dm.manual_saldo_anterior, dsa.saldo_anterior, 0)  AS saldo_anterior,
-        -- Dinero a entregar = manual entry if provided, otherwise Abono - Gasto
+        -- Dinero a entregar = valor manual si existe, si no Abono - Gasto
         COALESCE(dm.entregado, COALESCE(dp.abono_total, 0)
           - COALESCE(dm.gasto, 0))                                AS dinero_a_entregar,
-        -- Ganancia = Entrega - Inversión + Abono - Gasto
-        COALESCE(dvi.suma_entrega, 0)
-          - COALESCE(dvi.inversion_dia, 0)
-          + COALESCE(dp.abono_total, 0)
-          - COALESCE(dm.gasto, 0)                                AS ganancia
+        -- Ganancia = $ - Gasto
+        COALESCE(dm.entregado, COALESCE(dp.abono_total, 0)
+          - COALESCE(dm.gasto, 0)) - COALESCE(dm.gasto, 0)     AS ganancia
       FROM week_days wd
       LEFT JOIN daily_payments dp ON dp.day = wd.day
       LEFT JOIN daily_visits dvs ON dvs.day = wd.day

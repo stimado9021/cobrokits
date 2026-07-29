@@ -457,6 +457,8 @@ export function EntregarInventario({
               <tr>
                 <th style={{ padding: "4px 8px", textAlign: "left", fontSize: "11px" }}>Producto</th>
                 <th style={{ padding: "4px 8px", textAlign: "center", fontSize: "11px" }}>Stock</th>
+                <th style={{ padding: "4px 8px", textAlign: "center", fontSize: "11px" }}>Costo</th>
+                <th style={{ padding: "4px 8px", textAlign: "center", fontSize: "11px" }}>PVP</th>
                 <th style={{ padding: "4px 8px", textAlign: "center", fontSize: "11px" }}>Cant.</th>
               </tr>
             </thead>
@@ -467,6 +469,8 @@ export function EntregarInventario({
                   <tr key={p.id}>
                     <td style={{ padding: "3px 8px", fontSize: "12px" }}>{p.name}</td>
                     <td style={{ padding: "3px 8px", textAlign: "center", fontWeight: "bold", fontSize: "12px" }}>{stock}</td>
+                    <td style={{ padding: "3px 8px", textAlign: "center", fontSize: "12px" }}>{formatMoney(p.investment_cost)}</td>
+                    <td style={{ padding: "3px 8px", textAlign: "center", fontSize: "12px" }}>{formatMoney(p.sale_price)}</td>
                     <td style={{ padding: "3px 8px", textAlign: "center" }}>
                       <input
                         type="text"

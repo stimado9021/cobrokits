@@ -87,6 +87,12 @@ function ProductRow({ product, onAdded }) {
             {product.quantity}
           </strong>
         </td>
+        <td style={{ textAlign: "center", fontSize: "0.85rem" }}>
+          ${Number(product.investment_cost).toLocaleString("es-CO", { minimumFractionDigits: 0 })}
+        </td>
+        <td style={{ textAlign: "center", fontSize: "0.85rem", fontWeight: 500 }}>
+          ${Number(product.sale_price).toLocaleString("es-CO", { minimumFractionDigits: 0 })}
+        </td>
         <td>
           <button
             type="button"
@@ -115,7 +121,7 @@ function ProductRow({ product, onAdded }) {
       {/* Inline expansion */}
       {open && (
         <tr style={{ background: "rgba(59,130,246,0.04)" }}>
-          <td colSpan={3} style={{ paddingBottom: "12px", paddingTop: "4px" }}>
+          <td colSpan={5} style={{ paddingBottom: "12px", paddingTop: "4px" }}>
             <form
               onSubmit={handleAdd}
               style={{
@@ -417,6 +423,8 @@ export function Inventario() {
               <tr>
                 <th style={{ textAlign: "left" }} title="Nombre del producto">Producto</th>
                 <th title="Cantidad disponible en bodega">Stock</th>
+                <th title="Precio de costo">Costo</th>
+                <th title="Precio de venta">PVP</th>
                 <th title="Agregar unidades al stock">Agregar</th>
               </tr>
             </thead>
@@ -430,7 +438,7 @@ export function Inventario() {
               ))}
               {stock.length === 0 && (
                 <tr>
-                  <td colSpan={3} style={{ color: "var(--muted)" }}>
+                  <td colSpan={5} style={{ color: "var(--muted)" }}>
                     No hay productos activos.
                   </td>
                 </tr>

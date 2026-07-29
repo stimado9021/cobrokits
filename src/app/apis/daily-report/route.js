@@ -108,7 +108,7 @@ export async function GET(request) {
         COALESCE(dm.gasto, 0) AS gasto,
         COALESCE(dm.cnt_notes, '') AS cnt_notes,
         COALESCE(dm.entregado, COALESCE(dp.m1_efectivo, 0) + COALESCE(dp.m2_nequi, 0) - COALESCE(dm.gasto, 0)) AS dinero_a_entregar,
-        COALESCE(dvi.suma_entrega, 0) - COALESCE(dvi.inversion_dia, 0) + COALESCE(dp.m1_efectivo, 0) + COALESCE(dp.m2_nequi, 0) - COALESCE(dm.gasto, 0) AS ganancia
+        COALESCE(dm.entregado, COALESCE(dp.m1_efectivo, 0) + COALESCE(dp.m2_nequi, 0) - COALESCE(dm.gasto, 0)) - COALESCE(dm.gasto, 0) AS ganancia
       FROM seller_list sl
       LEFT JOIN daily_payments dp ON dp.seller_id = sl.id
       LEFT JOIN daily_visits dv ON dv.seller_id = sl.id
