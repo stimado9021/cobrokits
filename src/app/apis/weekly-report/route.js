@@ -157,9 +157,9 @@ export async function GET(request) {
         -- Dinero a entregar = valor manual si existe, si no Abono - Gasto
         COALESCE(dm.entregado, COALESCE(dp.abono_total, 0)
           - COALESCE(dm.gasto, 0))                                AS dinero_a_entregar,
-        -- Ganancia = $ - Gasto
+        -- Ganancia = $ - Costo
         COALESCE(dm.entregado, COALESCE(dp.abono_total, 0)
-          - COALESCE(dm.gasto, 0)) - COALESCE(dm.gasto, 0)     AS ganancia
+          - COALESCE(dm.gasto, 0)) - COALESCE(dvi.inversion_dia, 0)     AS ganancia
       FROM week_days wd
       LEFT JOIN daily_payments dp ON dp.day = wd.day
       LEFT JOIN daily_visits dvs ON dvs.day = wd.day

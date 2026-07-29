@@ -73,8 +73,8 @@ function cellTitle(col, rawVal) {
 
 /* ─── Row definitions (matches the physical ledger) ───── */
 const ROWS = [
-  { key: "suma_entrega",        label: "Cobros",               type: "money",   editable: false, desc: "Ventas nuevas dejadas en crédito = Σ(line_sale_total)" },
   { key: "saldo_anterior",      label: "Saldo Ant.",           type: "money",   editable: true,  desc: "Deuda total de los clientes al inicio de la semana ( editable )" },
+  { key: "suma_entrega",        label: "Cobros",               type: "money",   editable: false, desc: "Ventas nuevas dejadas en crédito = Σ(line_sale_total)" },
   { key: "inversion_dia",       label: "Costo",                type: "money",   editable: false, desc: "Costo de inversión = Σ(cantidad × costo_unitario)" },
   { key: "costo_cliente",       label: "Costo Cli.",           type: "money",   editable: false, desc: "Valor de venta = Σ(cantidad × precio_venta)" },
   { key: "m1_efectivo",         label: "Efectivo",             type: "money",   editable: false, desc: "Recaudo en efectivo = Σ(pagos método efectivo)" },
@@ -83,7 +83,7 @@ const ROWS = [
   { key: "entrega",             label: "Entrega",              type: "money",   editable: false, desc: "(Saldo Ant. + Cobros) − Total (Efectivo + Nequi)", highlight: "computed" },
   { key: "gasto",               label: "Gasto",                type: "money",   editable: true,  desc: "Gasolina, almuerzo, viáticos… (lo ingresa el vendedor)" },
   { key: "dinero_a_entregar",   label: "$",                    type: "money",   editable: true,  desc: "$ = Abono − Gasto (editable)" },
-  { key: "ganancia",            label: "Ganancia",             type: "money",   editable: false, desc: "Ganancia = $ − Gasto", highlight: "profit" },
+  { key: "ganancia",            label: "Ganancia",             type: "money",   editable: false, desc: "Ganancia = $ − Costo", highlight: "profit" },
   { key: "d_merca",             label: "D/Merca",              type: "money",   editable: false, desc: "(Entrega + Total) − Costo Cli. − Cobros", highlight: "computed" },
   { key: "d_dinero",            label: "D/Dinero",             type: "money",   editable: false, desc: "$ + Gastos − Total", highlight: "computed" },
   { key: "clientes_abonaron",   label: "Cuentas",              type: "number",  editable: false, desc: "Clientes únicos que compraron o abonaron hoy" },
@@ -144,7 +144,8 @@ export function ReportesSemanales({ activeSellerId = "", activeSellerName = "Tod
           const entrega = n(d.saldo_anterior) + n(d.suma_entrega) - totalRecaudo;
           const dMerca = (entrega + totalRecaudo) - n(d.costo_cliente) - n(d.suma_entrega);
           const dDinero = n(d.dinero_a_entregar) + n(d.gasto) - totalRecaudo;
-          return { ...d, total_recaudo: totalRecaudo, entrega, d_merca: dMerca, d_dinero: dDinero };
+          const ganancia = n(d.dinero_a_entregar) - n(d.inversion_dia);
+          return { ...d, total_recaudo: totalRecaudo, entrega, d_merca: dMerca, d_dinero: dDinero, ganancia };
         }));
       }
     } catch (err) {
@@ -189,9 +190,15 @@ export function ReportesSemanales({ activeSellerId = "", activeSellerName = "Tod
         return { ...d, saldo_anterior: newSaldo, entrega, d_merca: dMerca };
       }));
     } else {
-      setDays(prev => prev.map((d, i) => i === dayIdx
-        ? { ...d, [key]: key === "cnt_notes" ? value : n(value) }
-        : d));
+      setDays(prev => prev.map((d, i) => {
+        if (i !== dayIdx) return d;
+        const newVal = key === "cnt_notes" ? value : n(value);
+        const updates = { [key]: newVal };
+        if (key === "dinero_a_entregar") {
+          updates.ganancia = newVal - n(d.inversion_dia);
+        }
+        return { ...d, ...updates };
+      }));
     }
     setEditing(null);
 
@@ -329,8 +336,8 @@ export function ReportesSemanales({ activeSellerId = "", activeSellerName = "Tod
       // Columnas visibles en el PDF
       const pdfCols = [
         { key: "day", label: "FECHA", type: "label" },
-        { key: "suma_entrega", label: "COBROS", type: "money" },
         { key: "saldo_anterior", label: "SALDO ANT.", type: "money" },
+        { key: "suma_entrega", label: "COBROS", type: "money" },
         { key: "inversion_dia", label: "COSTO", type: "money" },
         { key: "costo_cliente", label: "COSTO CLI.", type: "money" },
         { key: "m1_efectivo", label: "EFECTIVO", type: "money" },

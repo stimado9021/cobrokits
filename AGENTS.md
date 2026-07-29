@@ -99,7 +99,7 @@ export async function GET() { ... }
 - **D1/D2 columns** — Removed from UI but still in DB (`weekly_manual_entries`)
 - **Saldo Anterior** = `SUM(new_balance)` de las visitas del mismo día hace 7 días (mismo vendedor)
 - **Dinero a entregar** = `abono_total - gasto`
-- **Ganancia** = `suma_entrega - inversion_dia + abono_total - gasto`
+- **Ganancia** = `$ - Costo` = `dinero_a_entregar - inversion_dia`
 
 ## Running Scripts
 Many scripts in `scripts/` and root require `DATABASE_URL` env var:
