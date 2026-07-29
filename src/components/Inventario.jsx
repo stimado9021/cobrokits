@@ -91,10 +91,10 @@ function ProductRow({ product, onAdded }) {
           ${Number(product.investment_cost).toLocaleString("es-CO", { minimumFractionDigits: 0 })}
         </td>
         <td style={{ textAlign: "center", fontSize: "0.85rem", fontWeight: 500 }}>
-          ${(Number(product.quantity) * Number(product.investment_cost)).toLocaleString("es-CO", { minimumFractionDigits: 0 })}
+          ${Number(product.sale_price).toLocaleString("es-CO", { minimumFractionDigits: 0 })}
         </td>
         <td style={{ textAlign: "center", fontSize: "0.85rem", fontWeight: 500 }}>
-          ${Number(product.sale_price).toLocaleString("es-CO", { minimumFractionDigits: 0 })}
+          ${(Number(product.quantity) * Number(product.investment_cost)).toLocaleString("es-CO", { minimumFractionDigits: 0 })}
         </td>
         <td style={{ textAlign: "center", fontSize: "0.85rem", fontWeight: 500, color: "var(--brand)" }}>
           ${(Number(product.quantity) * Number(product.sale_price)).toLocaleString("es-CO", { minimumFractionDigits: 0 })}
@@ -430,8 +430,8 @@ export function Inventario() {
                 <th style={{ textAlign: "left" }} title="Nombre del producto">Producto</th>
                 <th title="Cantidad disponible en bodega">Stock</th>
                 <th title="Precio de costo">Costo</th>
-                <th title="Stock × Costo = inversión total">Inversión</th>
                 <th title="Precio de venta">PVP</th>
+                <th title="Stock × Costo = inversión total">Inversión</th>
                 <th title="Stock × PVP = valor estimado total">Estimado</th>
                 <th title="Agregar unidades al stock">Agregar</th>
               </tr>
