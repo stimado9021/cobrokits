@@ -1,0 +1,216 @@
+
+> cobrokits@0.1.0 dev
+> next dev
+
+▲ Next.js 16.2.9 (Turbopack)
+- Local:         http://localhost:3000
+- Network:       http://192.168.1.17:3000
+- Environments: .env
+✓ Ready in 789ms
+
+○ Compiling / ...
+ GET / 200 in 4.2s (next.js: 3.7s, application-code: 434ms)
+[browser] A tree hydrated but some attributes of the server rendered HTML didn't match the client properties. This won't be patched up. This can happen if a SSR-ed Client Component used:
+
+- A server/client branch `if (typeof window !== 'undefined')`.
+- Variable input such as `Date.now()` or `Math.random()` which changes each time it's called.
+- Date formatting in a user's locale which doesn't match the server.
+- External changing data without sending a snapshot of it along with the HTML.
+- Invalid HTML tag nesting.
+
+It can also happen if the client has a browser extension installed which messes with the HTML before React loaded.
+
+https://react.dev/link/hydration-mismatch
+
+  ...
+    <HotReload globalError={[...]} webSocket={WebSocket} staticIndicatorState={{pathname:null, ...}}>
+      <AppDevOverlayErrorBoundary globalError={[...]}>
+        <ReplaySsrOnlyErrors>
+        <DevRootHTTPAccessFallbackBoundary>
+          <HTTPAccessFallbackBoundary notFound={<NotAllowedRootHTTPFallbackError>}>
+            <HTTPAccessFallbackErrorBoundary pathname="/" notFound={<NotAllowedRootHTTPFallbackError>} ...>
+              <RedirectBoundary>
+                <RedirectErrorBoundary router={{...}}>
+                  <Head>
+                  <__next_root_layout_boundary__>
+                    <SegmentViewNode type="layout" pagePath="layout.js">
+                      <SegmentTrieNode>
+                      <link>
+                      <script>
+                      <script>
+                      <RootLayout>
+                        <html lang="es">
+                          <body
+-                           data-smart-converter-loaded="true"
+                          >
+                  ...
+ 
+(node:12944) Warning: SECURITY WARNING: The SSL modes 'prefer', 'require', and 'verify-ca' are treated as aliases for 'verify-full'.
+In the next major version (pg-connection-string v3.0.0 and pg v9.0.0), these modes will adopt standard libpq semantics, which have weaker security guarantees.
+
+To prepare for this change:
+- If you want the current behavior, explicitly use 'sslmode=verify-full'
+- If you want libpq compatibility now, use 'uselibpqcompat=true&sslmode=require'
+
+See https://www.postgresql.org/docs/current/libpq-ssl.html for libpq SSL mode definitions.
+(Use `node --trace-warnings ...` to show where the warning was created)
+(node:12944) DeprecationWarning: Calling client.query() when the client is already executing a query is deprecated and will be removed in pg@9.0. Use async/await or an external async flow control mechanism instead.
+ GET /apis/inventory 200 in 2.6s (next.js: 943ms, application-code: 1650ms)
+ GET /apis/customers 200 in 2.6s (next.js: 1118ms, application-code: 1515ms)
+ GET /apis/products 200 in 2.7s (next.js: 1011ms, application-code: 1647ms)
+ POST /apis/daily-stock 200 in 2.9s (next.js: 1013ms, application-code: 1886ms)
+ GET /apis/sellers 200 in 2.7s (next.js: 1088ms, application-code: 1605ms)
+ GET /apis/visits 200 in 612ms (next.js: 144ms, application-code: 468ms)
+ GET /apis/dashboard 200 in 3.7s (next.js: 901ms, application-code: 2.8s)
+ GET /apis/daily-stock?sellerId=629c6d18-c186-4234-a3fb-d3f953a4f5e4&stockDate=2026-07-25 200 in 165ms (next.js: 13ms, application-code: 151ms)
+ GET /apis/daily-stock?sellerId=629c6d18-c186-4234-a3fb-d3f953a4f5e4&stockDate=2026-07-25 200 in 259ms (next.js: 25ms, application-code: 234ms)
+ GET / 200 in 106ms (next.js: 13ms, application-code: 94ms)
+[browser] A tree hydrated but some attributes of the server rendered HTML didn't match the client properties. This won't be patched up. This can happen if a SSR-ed Client Component used:
+
+- A server/client branch `if (typeof window !== 'undefined')`.
+- Variable input such as `Date.now()` or `Math.random()` which changes each time it's called.
+- Date formatting in a user's locale which doesn't match the server.
+- External changing data without sending a snapshot of it along with the HTML.
+- Invalid HTML tag nesting.
+
+It can also happen if the client has a browser extension installed which messes with the HTML before React loaded.
+
+https://react.dev/link/hydration-mismatch
+
+  ...
+    <HotReload globalError={[...]} webSocket={WebSocket} staticIndicatorState={{pathname:null, ...}}>
+      <AppDevOverlayErrorBoundary globalError={[...]}>
+        <ReplaySsrOnlyErrors>
+        <DevRootHTTPAccessFallbackBoundary>
+          <HTTPAccessFallbackBoundary notFound={<NotAllowedRootHTTPFallbackError>}>
+            <HTTPAccessFallbackErrorBoundary pathname="/" notFound={<NotAllowedRootHTTPFallbackError>} ...>
+              <RedirectBoundary>
+                <RedirectErrorBoundary router={{...}}>
+                  <Head>
+                  <__next_root_layout_boundary__>
+                    <SegmentViewNode type="layout" pagePath="layout.js">
+                      <SegmentTrieNode>
+                      <link>
+                      <script>
+                      <script>
+                      <RootLayout>
+                        <html lang="es">
+                          <body
+-                           data-smart-converter-loaded="true"
+                          >
+                  ...
+ 
+ GET /apis/sellers 200 in 191ms (next.js: 29ms, application-code: 162ms)
+ POST /apis/daily-stock 200 in 237ms (next.js: 21ms, application-code: 216ms)
+ GET /apis/products 200 in 168ms (next.js: 12ms, application-code: 155ms)
+ GET /apis/inventory 200 in 213ms (next.js: 42ms, application-code: 171ms)
+ GET /apis/customers 200 in 357ms (next.js: 27ms, application-code: 330ms)
+ GET /apis/visits 200 in 567ms (next.js: 10ms, application-code: 557ms)
+ GET /apis/dashboard 200 in 1441ms (next.js: 10ms, application-code: 1431ms)
+ GET /apis/daily-stock?sellerId=629c6d18-c186-4234-a3fb-d3f953a4f5e4&stockDate=2026-07-25 200 in 209ms (next.js: 13ms, application-code: 195ms)
+ GET /apis/daily-stock?sellerId=629c6d18-c186-4234-a3fb-d3f953a4f5e4&stockDate=2026-07-25 200 in 215ms (next.js: 22ms, application-code: 192ms)
+ GET / 200 in 82ms (next.js: 11ms, application-code: 72ms)
+ GET /apis/products 200 in 1532ms (next.js: 82ms, application-code: 1450ms)
+ GET /apis/sellers 200 in 1540ms (next.js: 67ms, application-code: 1472ms)
+ GET /apis/customers 200 in 1541ms (next.js: 89ms, application-code: 1452ms)
+ GET /apis/inventory 200 in 1542ms (next.js: 97ms, application-code: 1445ms)
+ POST /apis/daily-stock 200 in 1628ms (next.js: 7ms, application-code: 1621ms)
+ GET /apis/visits 200 in 526ms (next.js: 13ms, application-code: 512ms)
+ GET /apis/dashboard 200 in 2.5s (next.js: 49ms, application-code: 2.5s)
+ GET /apis/daily-stock?sellerId=629c6d18-c186-4234-a3fb-d3f953a4f5e4&stockDate=2026-07-25 200 in 200ms (next.js: 6ms, application-code: 194ms)
+ GET /apis/daily-stock?sellerId=629c6d18-c186-4234-a3fb-d3f953a4f5e4&stockDate=2026-07-25 200 in 165ms (next.js: 8ms, application-code: 157ms)
+ GET /apis/sellers 200 in 1352ms (next.js: 5ms, application-code: 1347ms)
+ POST /apis/customers 201 in 1487ms (next.js: 3ms, application-code: 1484ms)
+ POST /apis/customers 201 in 146ms (next.js: 3ms, application-code: 143ms)
+ POST /apis/customers 201 in 173ms (next.js: 4ms, application-code: 169ms)
+ POST /apis/customers 201 in 152ms (next.js: 6ms, application-code: 147ms)
+ GET /apis/daily-stock?sellerId=629c6d18-c186-4234-a3fb-d3f953a4f5e4&stockDate=2026-07-25 200 in 2.4s (next.js: 27ms, application-code: 2.4s)
+ GET /apis/daily-stock?sellerId=629c6d18-c186-4234-a3fb-d3f953a4f5e4&stockDate=2026-07-25 200 in 164ms (next.js: 5ms, application-code: 159ms)
+ GET /apis/daily-stock?sellerId=97e106b8-a030-4a7e-97d0-af491e533453&stockDate=2026-07-25 200 in 1310ms (next.js: 16ms, application-code: 1294ms)
+ GET /apis/daily-stock?sellerId=97e106b8-a030-4a7e-97d0-af491e533453&stockDate=2026-07-25 200 in 168ms (next.js: 7ms, application-code: 160ms)
+ GET / 200 in 190ms (next.js: 27ms, application-code: 163ms)
+[browser] A tree hydrated but some attributes of the server rendered HTML didn't match the client properties. This won't be patched up. This can happen if a SSR-ed Client Component used:
+
+- A server/client branch `if (typeof window !== 'undefined')`.
+- Variable input such as `Date.now()` or `Math.random()` which changes each time it's called.
+- Date formatting in a user's locale which doesn't match the server.
+- External changing data without sending a snapshot of it along with the HTML.
+- Invalid HTML tag nesting.
+
+It can also happen if the client has a browser extension installed which messes with the HTML before React loaded.
+
+https://react.dev/link/hydration-mismatch
+
+  ...
+    <HotReload globalError={[...]} webSocket={WebSocket} staticIndicatorState={{pathname:null, ...}}>
+      <AppDevOverlayErrorBoundary globalError={[...]}>
+        <ReplaySsrOnlyErrors>
+        <DevRootHTTPAccessFallbackBoundary>
+          <HTTPAccessFallbackBoundary notFound={<NotAllowedRootHTTPFallbackError>}>
+            <HTTPAccessFallbackErrorBoundary pathname="/" notFound={<NotAllowedRootHTTPFallbackError>} ...>
+              <RedirectBoundary>
+                <RedirectErrorBoundary router={{...}}>
+                  <Head>
+                  <__next_root_layout_boundary__>
+                    <SegmentViewNode type="layout" pagePath="layout.js">
+                      <SegmentTrieNode>
+                      <link>
+                      <script>
+                      <script>
+                      <RootLayout>
+                        <html lang="es">
+                          <body
+-                           data-smart-converter-loaded="true"
+                          >
+                  ...
+ 
+ GET /apis/sellers 200 in 1774ms (next.js: 55ms, application-code: 1718ms)
+ POST /apis/daily-stock 200 in 1869ms (next.js: 16ms, application-code: 1853ms)
+ GET /apis/daily-stock?sellerId=97e106b8-a030-4a7e-97d0-af491e533453&stockDate=2026-07-25 200 in 1788ms (next.js: 16ms, application-code: 1772ms)
+ GET /apis/customers 200 in 1756ms (next.js: 54ms, application-code: 1701ms)
+ GET /apis/products 200 in 1845ms (next.js: 40ms, application-code: 1805ms)
+ GET /apis/inventory 200 in 176ms (next.js: 14ms, application-code: 162ms)
+ GET /apis/daily-stock?sellerId=97e106b8-a030-4a7e-97d0-af491e533453&stockDate=2026-07-25 200 in 174ms (next.js: 24ms, application-code: 151ms)
+ GET /apis/visits 200 in 490ms (next.js: 38ms, application-code: 452ms)
+ GET /apis/dashboard 200 in 2.7s (next.js: 40ms, application-code: 2.7s)
+ POST /apis/visits 201 in 1305ms (next.js: 6ms, application-code: 1299ms)
+ GET /apis/dashboard 200 in 955ms (next.js: 8ms, application-code: 947ms)
+ GET /apis/customers 200 in 1281ms (next.js: 47ms, application-code: 1234ms)
+ GET /apis/inventory 200 in 1312ms (next.js: 46ms, application-code: 1265ms)
+ GET /apis/products 200 in 1333ms (next.js: 21ms, application-code: 1312ms)
+ GET /apis/sellers 200 in 1341ms (next.js: 36ms, application-code: 1305ms)
+ GET /apis/visits 200 in 1537ms (next.js: 20ms, application-code: 1517ms)
+ GET /apis/daily-stock?sellerId=97e106b8-a030-4a7e-97d0-af491e533453&stockDate=2026-07-25 200 in 1227ms (next.js: 7ms, application-code: 1221ms)
+ GET /apis/daily-stock?sellerId=97e106b8-a030-4a7e-97d0-af491e533453&stockDate=2026-07-25 200 in 153ms (next.js: 8ms, application-code: 145ms)
+ POST /apis/visits 201 in 1316ms (next.js: 16ms, application-code: 1300ms)
+ GET /apis/dashboard 200 in 1012ms (next.js: 12ms, application-code: 1000ms)
+ GET /apis/products 200 in 1263ms (next.js: 10ms, application-code: 1253ms)
+ GET /apis/sellers 200 in 1286ms (next.js: 8ms, application-code: 1278ms)
+ GET /apis/inventory 200 in 1287ms (next.js: 27ms, application-code: 1260ms)
+ GET /apis/customers 200 in 1326ms (next.js: 24ms, application-code: 1301ms)
+ GET /apis/visits 200 in 1644ms (next.js: 37ms, application-code: 1607ms)
+ GET /apis/daily-stock?sellerId=629c6d18-c186-4234-a3fb-d3f953a4f5e4&stockDate=2026-07-25 200 in 1343ms (next.js: 5ms, application-code: 1338ms)
+ GET /apis/daily-stock?sellerId=629c6d18-c186-4234-a3fb-d3f953a4f5e4 200 in 1499ms (next.js: 12ms, application-code: 1487ms)
+ GET /apis/daily-stock?sellerId=629c6d18-c186-4234-a3fb-d3f953a4f5e4&stockDate=2026-07-25 200 in 168ms (next.js: 10ms, application-code: 158ms)
+ GET /apis/general-stock 200 in 1774ms (next.js: 482ms, application-code: 1292ms)
+ GET /apis/daily-stock?sellerId=629c6d18-c186-4234-a3fb-d3f953a4f5e4 200 in 305ms (next.js: 4ms, application-code: 301ms)
+ GET /apis/general-stock 200 in 154ms (next.js: 7ms, application-code: 147ms)
+ GET /apis/stock/history 200 in 420ms (next.js: 262ms, application-code: 158ms)
+ GET /apis/stock/history 200 in 163ms (next.js: 11ms, application-code: 152ms)
+ GET /apis/stock 200 in 634ms (next.js: 212ms, application-code: 422ms)
+ GET /apis/stock 200 in 444ms (next.js: 11ms, application-code: 432ms)
+ GET /apis/weekly-report?weekStart=2026-07-20&sellerId=629c6d18-c186-4234-a3fb-d3f953a4f5e4 200 in 473ms (next.js: 177ms, application-code: 296ms)
+ GET /apis/weekly-report?weekStart=2026-07-20&sellerId=629c6d18-c186-4234-a3fb-d3f953a4f5e4 200 in 313ms (next.js: 19ms, application-code: 294ms)
+ GET /apis/daily-report?date=2026-07-25&sellerId=629c6d18-c186-4234-a3fb-d3f953a4f5e4 200 in 354ms (next.js: 168ms, application-code: 186ms)
+ GET /apis/daily-report?date=2026-07-25&sellerId=629c6d18-c186-4234-a3fb-d3f953a4f5e4 200 in 185ms (next.js: 8ms, application-code: 176ms)
+ GET /apis/daily-report?date=2026-07-25&sellerId=97e106b8-a030-4a7e-97d0-af491e533453 200 in 151ms (next.js: 4ms, application-code: 146ms)
+ GET /apis/daily-report?date=2026-07-25&sellerId=629c6d18-c186-4234-a3fb-d3f953a4f5e4 200 in 158ms (next.js: 5ms, application-code: 152ms)
+ GET /apis/daily-report?date=2026-07-25&sellerId=97e106b8-a030-4a7e-97d0-af491e533453 200 in 184ms (next.js: 7ms, application-code: 177ms)
+ GET /apis/daily-stock?sellerId=97e106b8-a030-4a7e-97d0-af491e533453&stockDate=2026-07-25 200 in 1981ms (next.js: 5ms, application-code: 1976ms)
+ GET /apis/daily-stock?sellerId=97e106b8-a030-4a7e-97d0-af491e533453&stockDate=2026-07-25 200 in 163ms (next.js: 15ms, application-code: 147ms)
+ GET /apis/daily-report?date=2026-07-25&sellerId=97e106b8-a030-4a7e-97d0-af491e533453 200 in 214ms (next.js: 8ms, application-code: 206ms)
+ GET /apis/daily-report?date=2026-07-25&sellerId=97e106b8-a030-4a7e-97d0-af491e533453 200 in 150ms (next.js: 5ms, application-code: 146ms)
+ GET /apis/stock/history 200 in 1330ms (next.js: 23ms, application-code: 1307ms)
+ GET /apis/stock/history 200 in 163ms (next.js: 7ms, application-code: 156ms)
+ GET /apis/stock 200 in 1590ms (next.js: 10ms, application-code: 1581ms)
+ GET /apis/stock 200 in 435ms (next.js: 11ms, application-code: 424ms)

@@ -1,0 +1,580 @@
+
+> cobrokits@0.1.0 dev
+> next dev
+
+▲ Next.js 16.2.9 (Turbopack)
+- Local:         http://localhost:3000
+- Network:       http://192.168.1.17:3000
+- Environments: .env
+✓ Ready in 905ms
+
+ GET / 200 in 958ms (next.js: 423ms, application-code: 534ms)
+(node:3096) Warning: SECURITY WARNING: The SSL modes 'prefer', 'require', and 'verify-ca' are treated as aliases for 'verify-full'.
+In the next major version (pg-connection-string v3.0.0 and pg v9.0.0), these modes will adopt standard libpq semantics, which have weaker security guarantees.
+
+To prepare for this change:
+- If you want the current behavior, explicitly use 'sslmode=verify-full'
+- If you want libpq compatibility now, use 'uselibpqcompat=true&sslmode=require'
+
+See https://www.postgresql.org/docs/current/libpq-ssl.html for libpq SSL mode definitions.
+(Use `node --trace-warnings ...` to show where the warning was created)
+[browser] A tree hydrated but some attributes of the server rendered HTML didn't match the client properties. This won't be patched up. This can happen if a SSR-ed Client Component used:
+
+- A server/client branch `if (typeof window !== 'undefined')`.
+- Variable input such as `Date.now()` or `Math.random()` which changes each time it's called.
+- Date formatting in a user's locale which doesn't match the server.
+- External changing data without sending a snapshot of it along with the HTML.
+- Invalid HTML tag nesting.
+
+It can also happen if the client has a browser extension installed which messes with the HTML before React loaded.
+
+https://react.dev/link/hydration-mismatch
+
+  ...
+    <HotReload globalError={[...]} webSocket={WebSocket} staticIndicatorState={{pathname:null, ...}}>
+      <AppDevOverlayErrorBoundary globalError={[...]}>
+        <ReplaySsrOnlyErrors>
+        <DevRootHTTPAccessFallbackBoundary>
+          <HTTPAccessFallbackBoundary notFound={<NotAllowedRootHTTPFallbackError>}>
+            <HTTPAccessFallbackErrorBoundary pathname="/" notFound={<NotAllowedRootHTTPFallbackError>} ...>
+              <RedirectBoundary>
+                <RedirectErrorBoundary router={{...}}>
+                  <Head>
+                  <__next_root_layout_boundary__>
+                    <SegmentViewNode type="layout" pagePath="layout.js">
+                      <SegmentTrieNode>
+                      <link>
+                      <script>
+                      <script>
+                      <RootLayout>
+                        <html lang="es">
+                          <body
+-                           data-smart-converter-loaded="true"
+                          >
+                  ...
+ 
+(node:3096) DeprecationWarning: Calling client.query() when the client is already executing a query is deprecated and will be removed in pg@9.0. Use async/await or an external async flow control mechanism instead.
+ POST /apis/daily-stock 200 in 2.3s (next.js: 445ms, application-code: 1878ms)
+ GET /apis/inventory 200 in 1611ms (next.js: 59ms, application-code: 1553ms)
+ GET /apis/customers 200 in 1859ms (next.js: 172ms, application-code: 1687ms)
+ GET /apis/visits 200 in 410ms (next.js: 67ms, application-code: 343ms)
+ GET /apis/products 200 in 2.1s (next.js: 122ms, application-code: 2.0s)
+ GET /apis/sellers 200 in 2.2s (next.js: 61ms, application-code: 2.1s)
+ GET /apis/dashboard 200 in 2.7s (next.js: 95ms, application-code: 2.6s)
+ GET /apis/daily-stock?sellerId=629c6d18-c186-4234-a3fb-d3f953a4f5e4&stockDate=2026-07-25 200 in 164ms (next.js: 8ms, application-code: 156ms)
+ GET /apis/daily-stock?sellerId=629c6d18-c186-4234-a3fb-d3f953a4f5e4&stockDate=2026-07-25 200 in 288ms (next.js: 26ms, application-code: 261ms)
+ GET / 200 in 65ms (next.js: 8ms, application-code: 57ms)
+✓ Compiled in 684ms
+⨯ ./src/components/RegistrarVisita.jsx:391:1
+Expected '}', got '<eof>'
+  [90m389 |[0m   );
+  [90m390 |[0m }
+[31m[1m>[0m [90m391 |[0m
+  [90m    |[0m [31m[1m^[0m
+
+Parsing ecmascript source code failed
+
+Import traces:
+  Client Component Browser:
+    ./src/components/RegistrarVisita.jsx [Client Component Browser]
+    ./src/app/page.jsx [Client Component Browser]
+    ./src/app/page.jsx [Server Component]
+
+  Client Component SSR:
+    ./src/components/RegistrarVisita.jsx [Client Component SSR]
+    ./src/app/page.jsx [Client Component SSR]
+    ./src/app/page.jsx [Server Component]
+
+
+
+./src/components/RegistrarVisita.jsx:391:1
+Expected a semicolon
+  [90m389 |[0m   );
+  [90m390 |[0m }
+[31m[1m>[0m [90m391 |[0m
+  [90m    |[0m [31m[1m^[0m
+
+Parsing ecmascript source code failed
+
+Import traces:
+  Client Component Browser:
+    ./src/components/RegistrarVisita.jsx [Client Component Browser]
+    ./src/app/page.jsx [Client Component Browser]
+    ./src/app/page.jsx [Server Component]
+
+  Client Component SSR:
+    ./src/components/RegistrarVisita.jsx [Client Component SSR]
+    ./src/app/page.jsx [Client Component SSR]
+    ./src/app/page.jsx [Server Component]
+
+
+[browser] ./src/components/RegistrarVisita.jsx:391:1
+Expected '}', got '<eof>'
+  389 |   );
+  390 | }
+> 391 |
+      | ^
+
+Parsing ecmascript source code failed
+
+Import traces:
+  Client Component Browser:
+    ./src/components/RegistrarVisita.jsx [Client Component Browser]
+    ./src/app/page.jsx [Client Component Browser]
+    ./src/app/page.jsx [Server Component]
+
+  Client Component SSR:
+    ./src/components/RegistrarVisita.jsx [Client Component SSR]
+    ./src/app/page.jsx [Client Component SSR]
+    ./src/app/page.jsx [Server Component] 
+[browser] ./src/components/RegistrarVisita.jsx:391:1
+Expected a semicolon
+  389 |   );
+  390 | }
+> 391 |
+      | ^
+
+Parsing ecmascript source code failed
+
+Import traces:
+  Client Component Browser:
+    ./src/components/RegistrarVisita.jsx [Client Component Browser]
+    ./src/app/page.jsx [Client Component Browser]
+    ./src/app/page.jsx [Server Component]
+
+  Client Component SSR:
+    ./src/components/RegistrarVisita.jsx [Client Component SSR]
+    ./src/app/page.jsx [Client Component SSR]
+    ./src/app/page.jsx [Server Component] 
+[browser] ./src/components/RegistrarVisita.jsx:391:1
+Expected '}', got '<eof>'
+  389 |   );
+  390 | }
+> 391 |
+      | ^
+
+Parsing ecmascript source code failed
+
+Import traces:
+  Client Component Browser:
+    ./src/components/RegistrarVisita.jsx [Client Component Browser]
+    ./src/app/page.jsx [Client Component Browser]
+    ./src/app/page.jsx [Server Component]
+
+  Client Component SSR:
+    ./src/components/RegistrarVisita.jsx [Client Component SSR]
+    ./src/app/page.jsx [Client Component SSR]
+    ./src/app/page.jsx [Server Component] 
+[browser] ./src/components/RegistrarVisita.jsx:391:1
+Expected a semicolon
+  389 |   );
+  390 | }
+> 391 |
+      | ^
+
+Parsing ecmascript source code failed
+
+Import traces:
+  Client Component Browser:
+    ./src/components/RegistrarVisita.jsx [Client Component Browser]
+    ./src/app/page.jsx [Client Component Browser]
+    ./src/app/page.jsx [Server Component]
+
+  Client Component SSR:
+    ./src/components/RegistrarVisita.jsx [Client Component SSR]
+    ./src/app/page.jsx [Client Component SSR]
+    ./src/app/page.jsx [Server Component] 
+[browser] ./src/components/RegistrarVisita.jsx:391:1
+Expected '}', got '<eof>'
+  389 |   );
+  390 | }
+> 391 |
+      | ^
+
+Parsing ecmascript source code failed
+
+Import traces:
+  Client Component Browser:
+    ./src/components/RegistrarVisita.jsx [Client Component Browser]
+    ./src/app/page.jsx [Client Component Browser]
+    ./src/app/page.jsx [Server Component]
+
+  Client Component SSR:
+    ./src/components/RegistrarVisita.jsx [Client Component SSR]
+    ./src/app/page.jsx [Client Component SSR]
+    ./src/app/page.jsx [Server Component] 
+[browser] ./src/components/RegistrarVisita.jsx:391:1
+Expected a semicolon
+  389 |   );
+  390 | }
+> 391 |
+      | ^
+
+Parsing ecmascript source code failed
+
+Import traces:
+  Client Component Browser:
+    ./src/components/RegistrarVisita.jsx [Client Component Browser]
+    ./src/app/page.jsx [Client Component Browser]
+    ./src/app/page.jsx [Server Component]
+
+  Client Component SSR:
+    ./src/components/RegistrarVisita.jsx [Client Component SSR]
+    ./src/app/page.jsx [Client Component SSR]
+    ./src/app/page.jsx [Server Component] 
+ GET / 500 in 871ms (next.js: 428ms, application-code: 443ms)
+[browser] ./src/components/RegistrarVisita.jsx:391:1
+Expected '}', got '<eof>'
+  389 |   );
+  390 | }
+> 391 |
+      | ^
+
+Parsing ecmascript source code failed
+
+Import traces:
+  Client Component Browser:
+    ./src/components/RegistrarVisita.jsx [Client Component Browser]
+    ./src/app/page.jsx [Client Component Browser]
+    ./src/app/page.jsx [Server Component]
+
+  Client Component SSR:
+    ./src/components/RegistrarVisita.jsx [Client Component SSR]
+    ./src/app/page.jsx [Client Component SSR]
+    ./src/app/page.jsx [Server Component] 
+[browser] ./src/components/RegistrarVisita.jsx:391:1
+Expected a semicolon
+  389 |   );
+  390 | }
+> 391 |
+      | ^
+
+Parsing ecmascript source code failed
+
+Import traces:
+  Client Component Browser:
+    ./src/components/RegistrarVisita.jsx [Client Component Browser]
+    ./src/app/page.jsx [Client Component Browser]
+    ./src/app/page.jsx [Server Component]
+
+  Client Component SSR:
+    ./src/components/RegistrarVisita.jsx [Client Component SSR]
+    ./src/app/page.jsx [Client Component SSR]
+    ./src/app/page.jsx [Server Component] 
+[browser] ./src/components/RegistrarVisita.jsx:391:1
+Expected '}', got '<eof>'
+  389 |   );
+  390 | }
+> 391 |
+      | ^
+
+Parsing ecmascript source code failed
+
+Import traces:
+  Client Component Browser:
+    ./src/components/RegistrarVisita.jsx [Client Component Browser]
+    ./src/app/page.jsx [Client Component Browser]
+    ./src/app/page.jsx [Server Component]
+
+  Client Component SSR:
+    ./src/components/RegistrarVisita.jsx [Client Component SSR]
+    ./src/app/page.jsx [Client Component SSR]
+    ./src/app/page.jsx [Server Component] 
+[browser] ./src/components/RegistrarVisita.jsx:391:1
+Expected a semicolon
+  389 |   );
+  390 | }
+> 391 |
+      | ^
+
+Parsing ecmascript source code failed
+
+Import traces:
+  Client Component Browser:
+    ./src/components/RegistrarVisita.jsx [Client Component Browser]
+    ./src/app/page.jsx [Client Component Browser]
+    ./src/app/page.jsx [Server Component]
+
+  Client Component SSR:
+    ./src/components/RegistrarVisita.jsx [Client Component SSR]
+    ./src/app/page.jsx [Client Component SSR]
+    ./src/app/page.jsx [Server Component] 
+⨯ ./src/components/RegistrarVisita.jsx:391:1
+Expected '}', got '<eof>'
+  [90m389 |[0m   );
+  [90m390 |[0m }
+[31m[1m>[0m [90m391 |[0m
+  [90m    |[0m [31m[1m^[0m
+
+Parsing ecmascript source code failed
+
+Import traces:
+  Client Component Browser:
+    ./src/components/RegistrarVisita.jsx [Client Component Browser]
+    ./src/app/page.jsx [Client Component Browser]
+    ./src/app/page.jsx [Server Component]
+
+  Client Component SSR:
+    ./src/components/RegistrarVisita.jsx [Client Component SSR]
+    ./src/app/page.jsx [Client Component SSR]
+    ./src/app/page.jsx [Server Component]
+
+
+
+./src/components/RegistrarVisita.jsx:391:1
+Expected a semicolon
+  [90m389 |[0m   );
+  [90m390 |[0m }
+[31m[1m>[0m [90m391 |[0m
+  [90m    |[0m [31m[1m^[0m
+
+Parsing ecmascript source code failed
+
+Import traces:
+  Client Component Browser:
+    ./src/components/RegistrarVisita.jsx [Client Component Browser]
+    ./src/app/page.jsx [Client Component Browser]
+    ./src/app/page.jsx [Server Component]
+
+  Client Component SSR:
+    ./src/components/RegistrarVisita.jsx [Client Component SSR]
+    ./src/app/page.jsx [Client Component SSR]
+    ./src/app/page.jsx [Server Component]
+
+
+⨯ ./src/components/RegistrarVisita.jsx:391:1
+Expected '}', got '<eof>'
+  [90m389 |[0m   );
+  [90m390 |[0m }
+[31m[1m>[0m [90m391 |[0m
+  [90m    |[0m [31m[1m^[0m
+
+Parsing ecmascript source code failed
+
+Import traces:
+  Client Component Browser:
+    ./src/components/RegistrarVisita.jsx [Client Component Browser]
+    ./src/app/page.jsx [Client Component Browser]
+    ./src/app/page.jsx [Server Component]
+
+  Client Component SSR:
+    ./src/components/RegistrarVisita.jsx [Client Component SSR]
+    ./src/app/page.jsx [Client Component SSR]
+    ./src/app/page.jsx [Server Component]
+
+
+
+./src/components/RegistrarVisita.jsx:391:1
+Expected a semicolon
+  [90m389 |[0m   );
+  [90m390 |[0m }
+[31m[1m>[0m [90m391 |[0m
+  [90m    |[0m [31m[1m^[0m
+
+Parsing ecmascript source code failed
+
+Import traces:
+  Client Component Browser:
+    ./src/components/RegistrarVisita.jsx [Client Component Browser]
+    ./src/app/page.jsx [Client Component Browser]
+    ./src/app/page.jsx [Server Component]
+
+  Client Component SSR:
+    ./src/components/RegistrarVisita.jsx [Client Component SSR]
+    ./src/app/page.jsx [Client Component SSR]
+    ./src/app/page.jsx [Server Component]
+
+
+ GET / 500 in 109ms (next.js: 45ms, application-code: 64ms)
+ GET / 500 in 105ms (next.js: 73ms, application-code: 32ms)
+[browser] ./src/components/RegistrarVisita.jsx:391:1
+Expected '}', got '<eof>'
+  389 |   );
+  390 | }
+> 391 |
+      | ^
+
+Parsing ecmascript source code failed
+
+Import traces:
+  Client Component Browser:
+    ./src/components/RegistrarVisita.jsx [Client Component Browser]
+    ./src/app/page.jsx [Client Component Browser]
+    ./src/app/page.jsx [Server Component]
+
+  Client Component SSR:
+    ./src/components/RegistrarVisita.jsx [Client Component SSR]
+    ./src/app/page.jsx [Client Component SSR]
+    ./src/app/page.jsx [Server Component] 
+[browser] ./src/components/RegistrarVisita.jsx:391:1
+Expected a semicolon
+  389 |   );
+  390 | }
+> 391 |
+      | ^
+
+Parsing ecmascript source code failed
+
+Import traces:
+  Client Component Browser:
+    ./src/components/RegistrarVisita.jsx [Client Component Browser]
+    ./src/app/page.jsx [Client Component Browser]
+    ./src/app/page.jsx [Server Component]
+
+  Client Component SSR:
+    ./src/components/RegistrarVisita.jsx [Client Component SSR]
+    ./src/app/page.jsx [Client Component SSR]
+    ./src/app/page.jsx [Server Component] 
+[browser] Uncaught Error: ./src/components/RegistrarVisita.jsx:391:1
+Expected '}', got '<eof>'
+  389 |   );
+  390 | }
+> 391 |
+      | ^
+
+Parsing ecmascript source code failed
+
+Import traces:
+  Client Component Browser:
+    ./src/components/RegistrarVisita.jsx [Client Component Browser]
+    ./src/app/page.jsx [Client Component Browser]
+    ./src/app/page.jsx [Server Component]
+
+  Client Component SSR:
+    ./src/components/RegistrarVisita.jsx [Client Component SSR]
+    ./src/app/page.jsx [Client Component SSR]
+    ./src/app/page.jsx [Server Component]
+
+
+    at <unknown> (Error: ./src/components/RegistrarVisita.jsx:391:1)
+    at <unknown> (Error: (./src/components/RegistrarVisita.jsx:391:1)
+[browser] ./src/components/RegistrarVisita.jsx:391:1
+Expected '}', got '<eof>'
+  389 |   );
+  390 | }
+> 391 |
+      | ^
+
+Parsing ecmascript source code failed
+
+Import traces:
+  Client Component Browser:
+    ./src/components/RegistrarVisita.jsx [Client Component Browser]
+    ./src/app/page.jsx [Client Component Browser]
+    ./src/app/page.jsx [Server Component]
+
+  Client Component SSR:
+    ./src/components/RegistrarVisita.jsx [Client Component SSR]
+    ./src/app/page.jsx [Client Component SSR]
+    ./src/app/page.jsx [Server Component] 
+[browser] ./src/components/RegistrarVisita.jsx:391:1
+Expected a semicolon
+  389 |   );
+  390 | }
+> 391 |
+      | ^
+
+Parsing ecmascript source code failed
+
+Import traces:
+  Client Component Browser:
+    ./src/components/RegistrarVisita.jsx [Client Component Browser]
+    ./src/app/page.jsx [Client Component Browser]
+    ./src/app/page.jsx [Server Component]
+
+  Client Component SSR:
+    ./src/components/RegistrarVisita.jsx [Client Component SSR]
+    ./src/app/page.jsx [Client Component SSR]
+    ./src/app/page.jsx [Server Component] 
+[browser] ./src/components/RegistrarVisita.jsx:391:1
+Expected '}', got '<eof>'
+  389 |   );
+  390 | }
+> 391 |
+      | ^
+
+Parsing ecmascript source code failed
+
+Import traces:
+  Client Component Browser:
+    ./src/components/RegistrarVisita.jsx [Client Component Browser]
+    ./src/app/page.jsx [Client Component Browser]
+    ./src/app/page.jsx [Server Component]
+
+  Client Component SSR:
+    ./src/components/RegistrarVisita.jsx [Client Component SSR]
+    ./src/app/page.jsx [Client Component SSR]
+    ./src/app/page.jsx [Server Component] 
+[browser] ./src/components/RegistrarVisita.jsx:391:1
+Expected a semicolon
+  389 |   );
+  390 | }
+> 391 |
+      | ^
+
+Parsing ecmascript source code failed
+
+Import traces:
+  Client Component Browser:
+    ./src/components/RegistrarVisita.jsx [Client Component Browser]
+    ./src/app/page.jsx [Client Component Browser]
+    ./src/app/page.jsx [Server Component]
+
+  Client Component SSR:
+    ./src/components/RegistrarVisita.jsx [Client Component SSR]
+    ./src/app/page.jsx [Client Component SSR]
+    ./src/app/page.jsx [Server Component] 
+[browser] ./src/components/RegistrarVisita.jsx:391:1
+Expected '}', got '<eof>'
+  389 |   );
+  390 | }
+> 391 |
+      | ^
+
+Parsing ecmascript source code failed
+
+Import traces:
+  Client Component Browser:
+    ./src/components/RegistrarVisita.jsx [Client Component Browser]
+    ./src/app/page.jsx [Client Component Browser]
+    ./src/app/page.jsx [Server Component]
+
+  Client Component SSR:
+    ./src/components/RegistrarVisita.jsx [Client Component SSR]
+    ./src/app/page.jsx [Client Component SSR]
+    ./src/app/page.jsx [Server Component] 
+[browser] ./src/components/RegistrarVisita.jsx:391:1
+Expected a semicolon
+  389 |   );
+  390 | }
+> 391 |
+      | ^
+
+Parsing ecmascript source code failed
+
+Import traces:
+  Client Component Browser:
+    ./src/components/RegistrarVisita.jsx [Client Component Browser]
+    ./src/app/page.jsx [Client Component Browser]
+    ./src/app/page.jsx [Server Component]
+
+  Client Component SSR:
+    ./src/components/RegistrarVisita.jsx [Client Component SSR]
+    ./src/app/page.jsx [Client Component SSR]
+    ./src/app/page.jsx [Server Component] 
+✓ Compiled in 263ms
+ GET / 200 in 616ms (next.js: 181ms, application-code: 435ms)
+ GET / 200 in 486ms (next.js: 17ms, application-code: 468ms)
+ GET / 200 in 458ms (next.js: 8ms, application-code: 450ms)
+ GET / 200 in 462ms (next.js: 47ms, application-code: 415ms)
+ GET / 200 in 494ms (next.js: 116ms, application-code: 378ms)
+ GET /apis/sellers 200 in 1629ms (next.js: 157ms, application-code: 1472ms)
+ GET /apis/products 200 in 1645ms (next.js: 214ms, application-code: 1432ms)
+ POST /apis/daily-stock 200 in 1918ms (next.js: 178ms, application-code: 1740ms)
+ GET /apis/inventory 200 in 1383ms (next.js: 49ms, application-code: 1334ms)
+ GET /apis/customers 200 in 1461ms (next.js: 51ms, application-code: 1410ms)
+ GET /apis/visits 200 in 526ms (next.js: 42ms, application-code: 484ms)
+ GET /apis/dashboard 200 in 2.7s (next.js: 63ms, application-code: 2.6s)
+ GET /apis/daily-stock?sellerId=629c6d18-c186-4234-a3fb-d3f953a4f5e4&stockDate=2026-07-25 200 in 160ms (next.js: 12ms, application-code: 148ms)
+ GET /apis/daily-stock?sellerId=629c6d18-c186-4234-a3fb-d3f953a4f5e4&stockDate=2026-07-25 200 in 189ms (next.js: 33ms, application-code: 157ms)
+ GET /apis/products 200 in 1345ms (next.js: 7ms, application-code: 1338ms)

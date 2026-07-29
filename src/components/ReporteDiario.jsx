@@ -45,8 +45,8 @@ function money(val) {
 
 /* ─── Column definitions ─────────────────────────────── */
 const COLS = [
-  { key: "suma_entrega",        label: "Cobros",               type: "money",   editable: false, desc: "Ventas nuevas dejadas en crédito hoy = Σ(line_sale_total)" },
   { key: "saldo_anterior",      label: "Saldo Ant.",           type: "money",   editable: true,  desc: "Deuda de los clientes al inicio del día ( editable )" },
+  { key: "suma_entrega",        label: "Cobros",               type: "money",   editable: false, desc: "Ventas nuevas dejadas en crédito hoy = Σ(line_sale_total)" },
   { key: "inversion_dia",       label: "Costo",                type: "money",   editable: false, desc: "Costo de inversión = Σ(cantidad × costo_unitario)" },
   { key: "costo_cliente",       label: "Costo Cli.",           type: "money",   editable: false, desc: "Valor de venta = Σ(cantidad × precio_venta)" },
   { key: "m1_efectivo",         label: "Efectivo",             type: "money",   editable: false, desc: "Recaudo en efectivo = Σ(pagos método efectivo)" },
@@ -292,8 +292,8 @@ export function ReporteDiario({ activeSellerId = "", activeSellerName = "Todos l
 
       const pdfCols = [
         { key: "seller_name", label: "VENDEDOR", type: "label" },
-        { key: "suma_entrega", label: "COBROS", type: "money" },
         { key: "saldo_anterior", label: "SALDO ANT.", type: "money" },
+        { key: "suma_entrega", label: "COBROS", type: "money" },
         { key: "inversion_dia", label: "COSTO", type: "money" },
         { key: "costo_cliente", label: "COSTO CLI.", type: "money" },
         { key: "m1_efectivo", label: "EFECTIVO", type: "money" },
