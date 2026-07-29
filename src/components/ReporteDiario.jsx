@@ -55,7 +55,7 @@ const COLS = [
   { key: "entrega",             label: "Entrega",              type: "money",   editable: false, desc: "(Saldo Ant. + Cobros) − Total (Efectivo + Nequi)", highlight: "computed" },
   { key: "gasto",               label: "Gasto",                type: "money",   editable: true,  desc: "Gasolina, almuerzo, viáticos… (lo ingresa el vendedor)" },
   { key: "dinero_a_entregar",   label: "$",                    type: "money",   editable: true,  desc: "$ = Abono − Gasto (editable)" },
-  { key: "ganancia",            label: "Ganancia",             type: "money",   editable: false, desc: "Ganancia = $ − Gasto", highlight: "profit" },
+  { key: "ganancia",            label: "Ganancia",             type: "money",   editable: false, desc: "Ganancia = $ − Costo", highlight: "profit" },
   { key: "d_merca",             label: "D/Merca",              type: "money",   editable: false, desc: "(Entrega + Total) − Costo Cli. − Cobros", highlight: "computed" },
   { key: "d_dinero",            label: "D/Dinero",             type: "money",   editable: false, desc: "$ + Gastos − Total", highlight: "computed" },
   { key: "clientes_abonaron",   label: "Cuentas",              type: "number",  editable: false, desc: "Clientes únicos que compraron o abonaron hoy" },
@@ -123,6 +123,7 @@ export function ReporteDiario({ activeSellerId = "", activeSellerName = "Todos l
             entrega,
             d_merca: (entrega + abono) - n(s.costo_cliente) - n(s.suma_entrega),
             d_dinero: n(s.dinero_a_entregar) + n(s.gasto) - abono,
+            ganancia: n(s.dinero_a_entregar) - n(s.inversion_dia),
           };
         }));
       }
@@ -175,9 +176,15 @@ export function ReporteDiario({ activeSellerId = "", activeSellerName = "Todos l
         };
       }));
     } else {
-      setSellers(prev => prev.map((s, i) => i === sellerIdx
-        ? { ...s, [key]: n(value) }
-        : s));
+      setSellers(prev => prev.map((s, i) => {
+        if (i !== sellerIdx) return s;
+        const newVal = n(value);
+        const updates = { [key]: newVal };
+        if (key === "dinero_a_entregar") {
+          updates.ganancia = newVal - n(s.inversion_dia);
+        }
+        return { ...s, ...updates };
+      }));
     }
     setEditing(null);
 
