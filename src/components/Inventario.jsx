@@ -361,14 +361,14 @@ export function Inventario() {
   }
 
   return (
-    <div
-      style={{
-        display: "grid",
-        gridTemplateColumns: "minmax(300px, 1fr) minmax(300px, 1.4fr)",
-        gap: "14px",
-        alignItems: "start",
-      }}
-    >
+      <div
+        style={{
+          display: "grid",
+          gridTemplateColumns: "minmax(300px, 1.6fr) minmax(200px, 0.6fr)",
+          gap: "14px",
+          alignItems: "start",
+        }}
+      >
       {/* ── LEFT: Products + stock ─────────────── */}
       <div className="panel">
         <div className="panelHead" style={{ justifyContent: "space-between" }}>
@@ -506,35 +506,37 @@ export function Inventario() {
             ))}
           </div>
         ) : history.length > 0 ? (
-          <div style={{ overflowX: "auto" }}>
-            <table className="dataTable">
-              <thead>
-                <tr>
-                  <th title="Fecha y hora del ingreso">Fecha</th>
-                  <th title="Nombre del producto ingresado">Producto</th>
-                  <th title="Cantidad de unidades ingresadas">Cantidad</th>
-                  <th title="Notas u observaciones del ingreso">Notas</th>
-                </tr>
-              </thead>
-              <tbody>
-                {history.map((entry) => (
-                  <tr key={entry.id}>
-                    <td style={{ whiteSpace: "nowrap", fontSize: "0.85rem" }} title={`Ingreso: ${formatDate(entry.created_at)}`}>
-                      {formatDate(entry.created_at)}
-                    </td>
-                    <td title={entry.product_name}>{entry.product_name}</td>
-                    <td title={`+${entry.quantity} unidades`}>
-                      <strong style={{ color: "var(--brand)" }}>
-                        +{entry.quantity}
-                      </strong>
-                    </td>
-                    <td style={{ color: "var(--muted)", fontSize: "0.85rem" }} title={entry.notes || "Sin notas"}>
-                      {entry.notes || "-"}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+            {history.map((entry) => (
+              <div
+                key={entry.id}
+                style={{
+                  background: "#f9f9f9",
+                  borderRadius: "8px",
+                  padding: "8px 10px",
+                  border: "1px solid #eee",
+                  fontSize: "0.8rem",
+                  lineHeight: 1.4,
+                }}
+              >
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "2px" }}>
+                  <span style={{ color: "var(--muted)", fontSize: "0.75rem" }}>
+                    {formatDate(entry.created_at)}
+                  </span>
+                  <strong style={{ color: "var(--brand)", fontSize: "0.85rem" }}>
+                    +{entry.quantity}
+                  </strong>
+                </div>
+                <div style={{ fontWeight: 500, marginBottom: "2px" }}>
+                  {entry.product_name}
+                </div>
+                {entry.notes && (
+                  <div style={{ color: "var(--muted)", fontSize: "0.75rem", fontStyle: "italic" }}>
+                    {entry.notes}
+                  </div>
+                )}
+              </div>
+            ))}
           </div>
         ) : (
           <p style={{ color: "var(--muted)" }}>
