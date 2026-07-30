@@ -12,6 +12,7 @@ import {
   UserPlus,
   Home as HomeIcon,
   MapPin,
+  Printer,
   Settings,
   Archive,
   Truck,
@@ -33,6 +34,7 @@ import { Inventario } from "../components/Inventario";
 import { Configuracion } from "../components/Configuracion";
 import { ReportesSemanales } from "../components/ReportesSemanales";
 import { ReporteDiario } from "../components/ReporteDiario";
+import { ImprimirCobros } from "../components/ImprimirCobros";
 import { Login } from "../components/Login";
 import { VendedorVisita } from "../components/VendedorVisita";
 import { VendedorCliente } from "../components/VendedorCliente";
@@ -651,6 +653,10 @@ export default function Home() {
             <Settings size={18} />
             {!sidebarCollapsed && <span>Configuración</span>}
           </button>
+          <button className={`navButton ${activeTab === 'imprimir-cobros' ? 'active' : ''}`} onClick={() => setActiveTab('imprimir-cobros')} title="Imprimir Cobros">
+            <Printer size={18} />
+            {!sidebarCollapsed && <span>Imprimir Cobros</span>}
+          </button>
           <button className="navButton" onClick={doLogout} title="Cerrar sesión" style={{borderTop:'1px solid var(--line)', marginTop:'4px', paddingTop:'12px'}}>
             <LogOut size={18} />
             {!sidebarCollapsed && <span>Salir</span>}
@@ -691,6 +697,7 @@ export default function Home() {
               {activeTab === 'inventario' && 'Inventario General'}
               {activeTab === 'reportes' && 'Reportes Semanales'}
               {activeTab === 'venta-diaria' && 'Venta Diaria'}
+              {activeTab === 'imprimir-cobros' && 'Imprimir Cobros'}
               {activeTab === 'configuracion' && 'Configuración de Sistema'}
             </h1>
           </div>
@@ -771,6 +778,15 @@ export default function Home() {
                 {[1,2,3].map(i => <div key={i} className="skel skel-row" />)}
               </div>
             )}
+            {activeTab === 'imprimir-cobros' && (
+              <div style={{padding:20,gap:12,display:'flex',flexDirection:'column'}}>
+                <div className="skel skel-line-lg" style={{width:'35%'}} />
+                <div className="skel skel-line" />
+                <div className="skel skel-line" />
+                <div className="skel skel-line" />
+                <div className="skel skel-line" />
+              </div>
+            )}
           </div>
         ) : (
           <>
@@ -807,6 +823,11 @@ export default function Home() {
         {activeTab === 'configuracion' && 
           <ErrorBoundary key="configuracion" message="Error al cargar la configuración">
           <Configuracion createSeller={createSeller} createProduct={createProduct} sellers={sellers} products={products} updateSeller={(id, data) => updateEntity('sellers', id, data)} deleteSeller={(id) => deleteEntity('sellers', id)} updateProduct={(id, data) => updateEntity('products', id, data)} deleteProduct={(id) => deleteEntity('products', id)} createCustomer={createCustomer} customers={customers} activeSellerId={activeSellerId} updateCustomer={(id, data) => updateEntity('customers', id, data)} deleteCustomer={(id) => deleteEntity('customers', id)} isSubmitting={isSubmitting} loading={loading} />
+          </ErrorBoundary>
+        }
+        {activeTab === 'imprimir-cobros' && 
+          <ErrorBoundary key="imprimir-cobros" message="Error al cargar imprimir cobros">
+            <ImprimirCobros sellers={sellers} activeSellerId={activeSellerId} activeSellerName={activeSellerName} />
           </ErrorBoundary>
         }
           </>
