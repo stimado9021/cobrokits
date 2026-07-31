@@ -110,7 +110,11 @@ function emptyDay(dateStr) {
 }
 
 /* ─── Component ─────────────────────────────────────────── */
-export function ReportesSemanales({ activeSellerId = "", activeSellerName = "Todos los vendedores" }) {
+export function ReportesSemanales({ activeSellerId = "", activeSellerName = "Todos los vendedores", activeCobroId = "", cobros = [] }) {
+  const activeCobroName = cobros.find(c => c.id === activeCobroId)?.name?.toUpperCase() || "";
+  const scopeName = activeCobroId ? activeCobroName : activeSellerName;
+  const scopeLabel = activeCobroId ? "Cobro" : "Vendedor";
+
   const [weekStart, setWeekStart] = useState(() => getWeekStart());
   const [days, setDays] = useState(() =>
     Array.from({ length: 7 }, (_, i) => emptyDay(toISODate(addDays(getWeekStart(), i))))
@@ -134,7 +138,8 @@ export function ReportesSemanales({ activeSellerId = "", activeSellerName = "Tod
     setLoading(true);
     try {
       const params = new URLSearchParams({ weekStart: toISODate(ws) });
-      if (activeSellerId) params.set("sellerId", activeSellerId);
+      if (activeCobroId) params.set("cobroId", activeCobroId);
+      else if (activeSellerId) params.set("sellerId", activeSellerId);
       const res = await fetch(`/apis/weekly-report?${params.toString()}`, { signal: controller.signal });
       if (controller.signal.aborted) return;
       const data = await res.json();
@@ -152,7 +157,7 @@ export function ReportesSemanales({ activeSellerId = "", activeSellerName = "Tod
       if (err?.name !== "AbortError") console.error("loadWeek error:", err);
     }
     finally { if (abortRef.current === controller) setLoading(false); }
-  }, [activeSellerId]);
+  }, [activeSellerId, activeCobroId]);
 
   useEffect(() => {
     loadWeek(weekStart);
@@ -202,20 +207,18 @@ export function ReportesSemanales({ activeSellerId = "", activeSellerName = "Tod
     }
     setEditing(null);
 
-    const updatedGasto = key === "gasto" ? n(value) : n(dayData.gasto);
-    const updatedNotes = key === "cnt_notes" ? value : dayData.cnt_notes;
-    const updatedEntregado = key === "dinero_a_entregar" ? n(value) : n(dayData.dinero_a_entregar);
-    const updatedSaldoAnterior = key === "saldo_anterior" ? n(value) : (dayData.saldo_anterior != null ? n(dayData.saldo_anterior) : null);
-
     setSaving(true);
     try {
       const payload = {
         date: dayData.day,
-        gasto: n(updatedGasto),
-        cnt_notes: updatedNotes || "",
-        entregado: updatedEntregado,
-        saldo_anterior: updatedSaldoAnterior,
       };
+      if (activeCobroId) payload.cobro_id = activeCobroId;
+      else if (activeSellerId) payload.seller_id = activeSellerId;
+      if (key === "gasto") payload.gasto = n(value);
+      else if (key === "cnt_notes") payload.cnt_notes = value;
+      else if (key === "dinero_a_entregar") payload.entregado = n(value);
+      else if (key === "saldo_anterior") payload.saldo_anterior = n(value);
+      else return;
       const res = await fetch("/apis/weekly-report", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -409,7 +412,7 @@ export function ReportesSemanales({ activeSellerId = "", activeSellerName = "Tod
           <p style="margin:2px 0 0; font-size:11px; color:#666;">Consignacion semanal</p>
           <h2 style="margin:10px 0 0; font-size:16px;">Reporte Semanal</h2>
           <p style="margin:3px 0 0; font-size:11px; color:#666;">${weekLabel}</p>
-          <p style="margin:2px 0 0; font-size:11px; color:#333;">Vendedor: <strong>${activeSellerName}</strong></p>
+          <p style="margin:2px 0 0; font-size:11px; color:#333;">${scopeLabel}: <strong>${scopeName}</strong></p>
         </div>
 
         <table style="width:100%; border-collapse:collapse; margin-bottom:16px;">
@@ -431,7 +434,7 @@ export function ReportesSemanales({ activeSellerId = "", activeSellerName = "Tod
       await html2pdf()
         .set({
           margin: [8, 8, 8, 8],
-          filename: `reporte-semanal-${activeSellerName}-${toISODate(weekStart)}.pdf`,
+          filename: `reporte-semanal-${String(scopeName).replace(/\s+/g, "-")}-${toISODate(weekStart)}.pdf`,
           image: { type: "jpeg", quality: 0.98 },
           html2canvas: { scale: 2 },
           jsPDF: { unit: "mm", format: "letter", orientation: "landscape" },
@@ -469,7 +472,7 @@ export function ReportesSemanales({ activeSellerId = "", activeSellerName = "Tod
           .gain-negative { color: #dc2626; }
         </style></head><body>
         <h2 style="font-family:Arial;color:#7c3aed;">CobroKits - Reporte Semanal</h2>
-        <p style="font-family:Arial;font-size:12px;">${weekLabel} · Vendedor: ${activeSellerName}</p>
+        <p style="font-family:Arial;font-size:12px;">${weekLabel} · ${scopeLabel}: ${scopeName}</p>
         <table>`;
 
       html += "<thead><tr>" + excelCols.map(c =>
@@ -521,7 +524,7 @@ export function ReportesSemanales({ activeSellerId = "", activeSellerName = "Tod
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
       a.href = url;
-      a.download = `reporte-semanal-${activeSellerName}-${toISODate(weekStart)}.xls`;
+      a.download = `reporte-semanal-${String(scopeName).replace(/\s+/g, "-")}-${toISODate(weekStart)}.xls`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -555,7 +558,7 @@ export function ReportesSemanales({ activeSellerId = "", activeSellerName = "Tod
           </button>
         </div>
         <div className="reportes-seller-name">
-          Vendedor: <strong>{activeSellerName}</strong>
+          {scopeLabel}: <strong>{scopeName || "Todos los vendedores"}</strong>
         </div>
         <p className="reportes-hint">Las celdas en <span style={{color:"var(--brand)"}}>verde</span> son editables. El resto se calcula automáticamente.</p>
       </div>

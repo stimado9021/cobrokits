@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { ChevronDown, FileSpreadsheet, FileText, UserPlus, PackagePlus, Edit2, Trash2 } from "lucide-react";
 import { Modal } from "./Modal";
 
@@ -9,7 +9,7 @@ function dayName(dayNum) {
 
 const fmt = (v) => new Intl.NumberFormat("es-CO", { style: "currency", currency: "COP", maximumFractionDigits: 0 }).format(v);
 
-export function Configuracion({ createSeller, createProduct, sellers, products, updateSeller, deleteSeller, updateProduct, deleteProduct, createCustomer, customers = [], activeSellerId, updateCustomer, deleteCustomer, isSubmitting, loading = false }) {
+export function Configuracion({ createSeller, createProduct, sellers, products, updateSeller, deleteSeller, updateProduct, deleteProduct, createCustomer, customers = [], updateCustomer, deleteCustomer, isSubmitting, loading = false, cobros = [] }) {
   const [openSection, setOpenSection] = useState("sellers");
   const [editingSeller, setEditingSeller] = useState(null);
   const [editingProduct, setEditingProduct] = useState(null);
@@ -17,13 +17,22 @@ export function Configuracion({ createSeller, createProduct, sellers, products, 
   const [showAddSeller, setShowAddSeller] = useState(false);
   const [showAddProduct, setShowAddProduct] = useState(false);
   const [showAddCustomer, setShowAddCustomer] = useState(false);
-  const [selectedSellerId, setSelectedSellerId] = useState(activeSellerId || "");
+  const [selectedCobroId, setSelectedCobroId] = useState("");
   const [generating, setGenerating] = useState(null);
 
   const today = new Intl.DateTimeFormat("es-CO", {
     timeZone: "America/Bogota",
     year: "numeric", month: "long", day: "numeric",
   }).format(new Date());
+
+  const todayDow = useMemo(() => {
+    const d = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Bogota" }));
+    return d.getDay();
+  }, []);
+
+  const todayCobros = useMemo(() => {
+    return cobros.filter(c => c.day_of_week === todayDow && c.is_active);
+  }, [cobros, todayDow]);
 
   function toggleSection(name) {
     setOpenSection(prev => prev === name ? null : name);
@@ -137,13 +146,9 @@ export function Configuracion({ createSeller, createProduct, sellers, products, 
     }
   }, [generating, today]);
 
-  useEffect(() => {
-    setSelectedSellerId(activeSellerId || "");
-  }, [activeSellerId]);
-
   const sellerCustomers = useMemo(
-    () => customers.filter((customer) => customer.seller_id === selectedSellerId),
-    [customers, selectedSellerId],
+    () => customers.filter((customer) => customer.cobro_id === selectedCobroId),
+    [customers, selectedCobroId],
   );
 
   const sellerCols = [
@@ -192,7 +197,7 @@ export function Configuracion({ createSeller, createProduct, sellers, products, 
               ))
             ) : sellers.map(s => (
               <tr key={s.id}>
-                <td>{s.name}</td>
+                <td>{s.name.toUpperCase()}</td>
                 <td>{s.phone || '-'}</td>
                 <td>{s.status}</td>
                 <td>
@@ -235,7 +240,7 @@ export function Configuracion({ createSeller, createProduct, sellers, products, 
               ))
             ) : products.map(p => (
               <tr key={p.id}>
-                <td>{p.name}</td>
+                <td>{p.name.toUpperCase()}</td>
                 <td>{fmt(p.investment_cost)}</td>
                 <td>{fmt(p.sale_price)}</td>
                 <td>
@@ -258,13 +263,13 @@ export function Configuracion({ createSeller, createProduct, sellers, products, 
         {accordionHead('customers', 'Cliente', customers.length, () => setShowAddCustomer(true), <UserPlus size={14} />)}
         {openSection === 'customers' && <>
         <div style={{display:'flex', gap:'8px', alignItems:'center', marginBottom:'10px'}}>
-          <label style={{fontSize:'0.78rem', color:'var(--ink)', fontWeight:500, whiteSpace:'nowrap'}}>Vendedor:</label>
-          <select value={selectedSellerId} onChange={(e) => setSelectedSellerId(e.target.value)} style={{width:'auto', minHeight:'34px', color:'var(--ink)'}}>
+          <label style={{fontSize:'0.78rem', color:'var(--ink)', fontWeight:500, whiteSpace:'nowrap'}}>Cobro:</label>
+          <select value={selectedCobroId} onChange={(e) => setSelectedCobroId(e.target.value)} style={{width:'auto', minHeight:'34px', color:'var(--ink)'}}>
             <option value="">Todos</option>
-            {sellers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+            {cobros.filter(c => c.is_active).map(cb => <option key={cb.id} value={cb.id}>{cb.name.toUpperCase()} ({dayName(Number(cb.day_of_week))})</option>)}
           </select>
         </div>
-        {selectedSellerId ? (
+        {selectedCobroId ? (
           <table className="dataTable skel-table">
             <thead>
               <tr>
@@ -290,7 +295,7 @@ export function Configuracion({ createSeller, createProduct, sellers, products, 
                 ))
               ) : sellerCustomers.length > 0 ? sellerCustomers.map(c => (
                 <tr key={c.id}>
-                  <td>{c.name}</td>
+                  <td>{c.name.toUpperCase()}</td>
                   <td>{c.address}</td>
                   <td>{c.phone || '-'}</td>
                   <td>{c.visit_day !== null && c.visit_day !== undefined ? dayName(Number(c.visit_day)) : "—"}</td>
@@ -304,13 +309,13 @@ export function Configuracion({ createSeller, createProduct, sellers, products, 
                     </button>
                   </td>
                 </tr>
-              )) : (
-                <tr><td colSpan={6} style={{textAlign: 'center', padding: '20px', color: 'var(--ink)'}}>No hay clientes para el vendedor seleccionado.</td></tr>
+              )              ) : (
+                <tr><td colSpan={6} style={{textAlign: 'center', padding: '20px', color: 'var(--ink)'}}>No hay clientes para el cobro seleccionado.</td></tr>
               )}
             </tbody>
           </table>
         ) : (
-          <p style={{textAlign:'center', padding:'20px', color:'var(--ink)'}}>Selecciona un vendedor para ver sus clientes.</p>
+          <p style={{textAlign:'center', padding:'20px', color:'var(--ink)'}}>Selecciona un cobro para ver sus clientes.</p>
         )}
         {sellerCustomers.length > 0 && exportButtons('clientes', 'Clientes', sellerCustomers, customerCols)}
         </>}
@@ -347,24 +352,14 @@ export function Configuracion({ createSeller, createProduct, sellers, products, 
       {showAddCustomer && (
         <Modal title="Agregar Cliente" onClose={() => setShowAddCustomer(false)}>
           <form className="field" onSubmit={(e) => { createCustomer(e); setShowAddCustomer(false); }}>
-            <select name="seller_id" required style={{color:'var(--ink)'}}>
-              <option value="">Selecciona vendedor</option>
-              {sellers.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+            <select name="cobro_id" required style={{color:'var(--ink)'}}>
+              <option value="">Selecciona cobro</option>
+              {todayCobros.map(c => <option key={c.id} value={c.id}>{c.name.toUpperCase()}</option>)}
             </select>
             <input name="name" placeholder="Nombre del cliente" required />
             <input name="address" placeholder="Dirección" required />
             <input name="phone" placeholder="Teléfono" />
             <input name="notes" placeholder="Observación" />
-            <select name="visit_day" style={{color:'var(--ink)'}}>
-              <option value="">Sin día fijo</option>
-              <option value={0}>Domingo</option>
-              <option value={1}>Lunes</option>
-              <option value={2}>Martes</option>
-              <option value={3}>Miércoles</option>
-              <option value={4}>Jueves</option>
-              <option value={5}>Viernes</option>
-              <option value={6}>Sábado</option>
-            </select>
             <button type="submit" className="primary" style={{marginTop:'10px'}} disabled={isSubmitting}>
               {isSubmitting ? <span className="spinner" /> : null}
               {isSubmitting ? "Guardando..." : "Guardar"}
@@ -377,35 +372,35 @@ export function Configuracion({ createSeller, createProduct, sellers, products, 
         <Modal title="Editar Cliente" onClose={() => setEditingCustomer(null)}>
           <form
             className="field"
-            onSubmit={async (e) => {
+             onSubmit={async (e) => {
               e.preventDefault();
               try {
                 const form = new FormData(e.currentTarget);
+                const cobroId = form.get("cobro_id") !== "" ? form.get("cobro_id") : null;
+                const selectedCobro = cobros.find(c => c.id === cobroId);
                 await updateCustomer(editingCustomer.id, {
+                  cobro_id: cobroId,
                   name: form.get("name"),
                   address: form.get("address"),
                   phone: form.get("phone"),
                   notes: form.get("notes"),
-                  visit_day: form.get("visit_day") !== "" ? form.get("visit_day") : null,
+                  visit_day: selectedCobro ? selectedCobro.day_of_week : editingCustomer.visit_day,
                 });
                 setEditingCustomer(null);
               } catch {}
             }}
           >
+            <select name="cobro_id" defaultValue={editingCustomer.cobro_id ?? ""} style={{color:'var(--ink)'}}>
+              <option value="">Selecciona cobro</option>
+              {Array.from(new Map(
+                [...todayCobros, ...cobros.filter(c => c.id === editingCustomer.cobro_id)]
+                  .map(c => [c.id, c])
+              ).values()).map(c => <option key={c.id} value={c.id}>{c.name.toUpperCase()}</option>)}
+            </select>
             <input name="name" defaultValue={editingCustomer.name} placeholder="Nombre" required />
             <input name="address" defaultValue={editingCustomer.address} placeholder="Dirección" required />
             <input name="phone" defaultValue={editingCustomer.phone || ""} placeholder="Teléfono" />
             <input name="notes" defaultValue={editingCustomer.notes || ""} placeholder="Observación" />
-            <select name="visit_day" defaultValue={editingCustomer.visit_day ?? ""} style={{color:'var(--ink)'}}>
-              <option value="">Sin día fijo</option>
-              <option value={0}>Domingo</option>
-              <option value={1}>Lunes</option>
-              <option value={2}>Martes</option>
-              <option value={3}>Miércoles</option>
-              <option value={4}>Jueves</option>
-              <option value={5}>Viernes</option>
-              <option value={6}>Sábado</option>
-            </select>
             <button type="submit" className="primary" style={{marginTop:'10px'}} disabled={isSubmitting}>
               {isSubmitting ? <span className="spinner" /> : null}
               {isSubmitting ? "Guardando..." : "Guardar Cambios"}

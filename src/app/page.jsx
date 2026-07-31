@@ -32,6 +32,7 @@ import { RegistrarVisita } from "../components/RegistrarVisita";
 import { EntregarInventario } from "../components/EntregarInventario";
 import { Inventario } from "../components/Inventario";
 import { Configuracion } from "../components/Configuracion";
+import { ConfigCobros } from "../components/ConfigCobros";
 import { ReportesSemanales } from "../components/ReportesSemanales";
 import { ReporteDiario } from "../components/ReporteDiario";
 import { ImprimirCobros } from "../components/ImprimirCobros";
@@ -101,7 +102,10 @@ export default function Home() {
   const [products, setProducts] = useState([]);
   const [inventory, setInventory] = useState([]);
   const [visits, setVisits] = useState([]);
+  const [cobros, setCobros] = useState([]);
   const [activeSellerId, setActiveSellerId] = useState("");
+  const [activeCobroId, setActiveCobroId] = useState("");
+  const [sellerCobros, setSellerCobros] = useState([]);
   const [notice, setNotice] = useState("");
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -110,13 +114,18 @@ export default function Home() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
 
   const activeCustomers = useMemo(
-    () => customers.filter((customer) => !activeSellerId || customer.seller_id === activeSellerId),
-    [customers, activeSellerId],
+    () => customers.filter((customer) => !activeCobroId || customer.cobro_id === activeCobroId),
+    [customers, activeCobroId],
   );
 
   const activeSellerName = useMemo(
-    () => sellers.find((seller) => seller.id === activeSellerId)?.name || "Todos los vendedores",
+    () => sellers.find((seller) => seller.id === activeSellerId)?.name?.toUpperCase() || "Todos los vendedores",
     [sellers, activeSellerId],
+  );
+
+  const activeCobroName = useMemo(
+    () => cobros.find((cobro) => cobro.id === activeCobroId)?.name?.toUpperCase() || "Todos los cobros",
+    [cobros, activeCobroId],
   );
 
   async function loadAll() {
@@ -129,9 +138,10 @@ export default function Home() {
         api("/apis/customers"),
         api("/apis/inventory"),
         api("/apis/visits"),
+        api("/apis/cobros"),
       ]);
 
-      const [dashboardData, sellersData, productsData, customersData, inventoryData, visitsData] = results.map(r => r.status === "fulfilled" ? r.value : null);
+      const [dashboardData, sellersData, productsData, customersData, inventoryData, visitsData, cobrosData] = results.map(r => r.status === "fulfilled" ? r.value : null);
 
       if (dashboardData) setDashboard(dashboardData);
       if (sellersData?.sellers) setSellers(sellersData.sellers);
@@ -139,6 +149,7 @@ export default function Home() {
       if (customersData?.customers) setCustomers(customersData.customers);
       if (inventoryData?.inventory) setInventory(inventoryData.inventory);
       if (visitsData?.visits) setVisits(visitsData.visits);
+      if (cobrosData?.cobros) setCobros(cobrosData.cobros);
 
       const sl = sellersData?.sellers || [];
       const vl = visitsData?.visits || [];
@@ -223,6 +234,32 @@ export default function Home() {
     return () => clearInterval(interval);
   }, [session]);
 
+  // ─── Seller's cobros = delivered today + cobros assigned to them ───
+  useEffect(() => {
+    if (!session || session.role !== "seller") { setSellerCobros([]); return; }
+    let cancelled = false;
+
+    async function loadSellerCobros() {
+      const hoy = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Bogota" }).format(new Date());
+      try {
+        const [stockRes, assignedRes] = await Promise.all([
+          fetch(`/apis/daily-stock?sellerId=${session.sellerId}&stockDate=${hoy}`),
+          fetch(`/apis/cobro-sellers?sellerId=${session.sellerId}`),
+        ]);
+        const stockData = await stockRes.json();
+        const assignedData = await assignedRes.json();
+        if (cancelled) return;
+        const delivered = stockData.success ? (stockData.items || []).map(i => i.cobro_id).filter(Boolean) : [];
+        const assigned = assignedData.success ? (assignedData.cobros || []).map(c => c.id) : [];
+        setSellerCobros([...new Set([...delivered, ...assigned])]);
+      } catch { /* keep current state */ }
+    }
+
+    loadSellerCobros();
+    const interval = setInterval(loadSellerCobros, 30000);
+    return () => { cancelled = true; clearInterval(interval); };
+  }, [session]);
+
   async function createSeller(event) {
     event.preventDefault();
     if (isSubmitting) return;
@@ -280,17 +317,18 @@ export default function Home() {
     const formElement = event.currentTarget;
     const form = new FormData(formElement);
     try {
-      await api("/apis/customers", {
-        method: "POST",
-        body: JSON.stringify({
-          seller_id: form.get("seller_id"),
-          name: form.get("name"),
-          address: form.get("address"),
-          phone: form.get("phone"),
-          notes: form.get("notes"),
-          visit_day: form.get("visit_day") !== "" ? Number(form.get("visit_day")) : null,
-        }),
-      });
+       await api("/apis/customers", {
+         method: "POST",
+         body: JSON.stringify({
+           seller_id: form.get("seller_id") || null,
+           cobro_id: form.get("cobro_id") || null,
+           name: form.get("name"),
+           address: form.get("address"),
+           phone: form.get("phone"),
+           notes: form.get("notes"),
+           visit_day: form.get("cobro_id") ? cobros.find(c => c.id === form.get("cobro_id"))?.day_of_week ?? null : null,
+         }),
+       });
       formElement.reset();
       setNotice("Cliente creado");
       await loadAll();
@@ -366,6 +404,7 @@ export default function Home() {
         method: "POST",
         body: JSON.stringify({
           seller_id: session.sellerId,
+          cobro_id: sellerCobros[0] || null,
           ...data,
         }),
       }, { queueOffline: true });
@@ -427,7 +466,7 @@ export default function Home() {
    // ====== SELLER VIEW (MOBILE) ======
    if (session.role === "seller") {
       const todayDow = hoyColombiaDow();
-      const sellerCustomers = customers.filter(c => c.seller_id === session.sellerId && c.visit_day === todayDow);
+      const sellerCustomers = customers.filter(c => c.cobro_id && sellerCobros.includes(c.cobro_id) && c.visit_day === todayDow);
       const hoy = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Bogota" }).format(new Date());
       const abonosHoy = visits
         .filter(v => v.seller_id === session.sellerId && v.visit_date?.startsWith(hoy))
@@ -554,6 +593,7 @@ export default function Home() {
           {sellerTab === "visita" && (
             <VendedorVisita
               seller={session}
+              cobroIds={sellerCobros}
               customers={customers}
               products={products}
               onVisit={sellerRegisterVisit}
@@ -657,6 +697,10 @@ export default function Home() {
             <Printer size={18} />
             {!sidebarCollapsed && <span>Imprimir Cobros</span>}
           </button>
+          <button className={`navButton ${activeTab === 'config-cobros' ? 'active' : ''}`} onClick={() => setActiveTab('config-cobros')} title="Config de Cobros">
+            <CreditCard size={18} />
+            {!sidebarCollapsed && <span>Config de Cobros</span>}
+          </button>
           <button className="navButton" onClick={doLogout} title="Cerrar sesión" style={{borderTop:'1px solid var(--line)', marginTop:'4px', paddingTop:'12px'}}>
             <LogOut size={18} />
             {!sidebarCollapsed && <span>Salir</span>}
@@ -668,11 +712,11 @@ export default function Home() {
         {!sidebarCollapsed && (
           <>
             <label className="field">
-              <span>Vendedor activo</span>
-              <select value={activeSellerId} onChange={(e) => setActiveSellerId(e.target.value)}>
+               <span>Cobro de hoy</span>
+              <select value={activeCobroId} onChange={(e) => setActiveCobroId(e.target.value)}>
                 <option value="">Todos</option>
-                {sellers.map((seller) => (
-                  <option key={seller.id} value={seller.id}>{seller.name}</option>
+                {cobros.filter(c => c.day_of_week === hoyColombiaDow() && c.is_active).map((cobro) => (
+                  <option key={cobro.id} value={cobro.id}>{cobro.name.toUpperCase()}</option>
                 ))}
               </select>
             </label>
@@ -698,7 +742,8 @@ export default function Home() {
               {activeTab === 'reportes' && 'Reportes Semanales'}
               {activeTab === 'venta-diaria' && 'Venta Diaria'}
               {activeTab === 'imprimir-cobros' && 'Imprimir Cobros'}
-              {activeTab === 'configuracion' && 'Configuración de Sistema'}
+               {activeTab === 'configuracion' && 'Configuración de Sistema'}
+               {activeTab === 'config-cobros' && 'Configuración de Cobros'}
             </h1>
           </div>
           <button className="iconButton" onClick={loadAll} disabled={loading} title="Actualizar">
@@ -778,31 +823,39 @@ export default function Home() {
                 {[1,2,3].map(i => <div key={i} className="skel skel-row" />)}
               </div>
             )}
-            {activeTab === 'imprimir-cobros' && (
-              <div style={{padding:20,gap:12,display:'flex',flexDirection:'column'}}>
-                <div className="skel skel-line-lg" style={{width:'35%'}} />
-                <div className="skel skel-line" />
-                <div className="skel skel-line" />
-                <div className="skel skel-line" />
-                <div className="skel skel-line" />
-              </div>
-            )}
+             {activeTab === 'imprimir-cobros' && (
+               <div style={{padding:20,gap:12,display:'flex',flexDirection:'column'}}>
+                 <div className="skel skel-line-lg" style={{width:'35%'}} />
+                 <div className="skel skel-line" />
+                 <div className="skel skel-line" />
+                 <div className="skel skel-line" />
+                 <div className="skel skel-line" />
+               </div>
+             )}
+             {activeTab === 'config-cobros' && (
+               <div style={{padding:20,gap:12,display:'flex',flexDirection:'column'}}>
+                 <div className="skel skel-line-lg" style={{width:'35%'}} />
+                 <div className="skel skel-line" />
+                 <div className="skel skel-line" />
+                 <div className="skel skel-line" />
+               </div>
+             )}
           </div>
         ) : (
           <>
         {activeTab === 'dashboard' && (
           <ErrorBoundary key="dashboard" message="Error al cargar el dashboard">
-            <Dashboard dashboard={dashboard} formatMoney={formatMoney} loading={loading} activeSellerId={activeSellerId} activeSellerName={activeSellerName} />
+            <Dashboard dashboard={dashboard} formatMoney={formatMoney} loading={loading} activeSellerId={activeSellerId} activeSellerName={activeSellerName} activeCobroId={activeCobroId} activeCobroName={activeCobroName} />
           </ErrorBoundary>
         )}
         {activeTab === 'registrar-visita' && 
           <ErrorBoundary key="registrar-visita" message="Error al cargar el registro de visitas">
-          <RegistrarVisita sellers={sellers} activeSellerId={activeSellerId} setActiveSellerId={setActiveSellerId} activeCustomers={activeCustomers} formatMoney={formatMoney} products={products} isSubmitting={isSubmitting} loading={loading} visits={visits} activeSellerName={activeSellerName} onRegistered={() => loadAll()} />
+          <RegistrarVisita sellers={sellers} cobros={cobros} activeCobroId={activeCobroId} setActiveCobroId={setActiveCobroId} activeSellerId={activeSellerId} setActiveSellerId={setActiveSellerId} activeCustomers={activeCustomers} formatMoney={formatMoney} products={products} isSubmitting={isSubmitting} loading={loading} visits={visits} activeSellerName={activeSellerName} onRegistered={() => loadAll()} />
           </ErrorBoundary>
         }
         {activeTab === 'entregar-inventario' && 
           <ErrorBoundary key="entregar-inventario" message="Error al cargar la entrega de inventario">
-          <EntregarInventario sellers={sellers} activeSellerId={activeSellerId} products={products} formatMoney={formatMoney} onDelivered={() => loadAll()} />
+           <EntregarInventario sellers={sellers} cobros={cobros} activeCobroId={activeCobroId} setActiveCobroId={setActiveCobroId} activeSellerId={activeSellerId} products={products} formatMoney={formatMoney} onDelivered={() => loadAll()} />
           </ErrorBoundary>
         }
         {activeTab === 'inventario' && 
@@ -812,24 +865,29 @@ export default function Home() {
         }
         {activeTab === 'reportes' && (
           <ErrorBoundary key="reportes" message="Error al cargar los reportes">
-            <ReportesSemanales activeSellerId={activeSellerId} activeSellerName={activeSellerName} />
+            <ReportesSemanales activeSellerId={activeSellerId} activeSellerName={activeSellerName} activeCobroId={activeCobroId} cobros={cobros} />
           </ErrorBoundary>
         )}
         {activeTab === 'venta-diaria' && (
           <ErrorBoundary key="venta-diaria" message="Error al cargar la venta diaria">
-            <ReporteDiario activeSellerId={activeSellerId} activeSellerName={activeSellerName} />
+            <ReporteDiario activeSellerId={activeSellerId} activeSellerName={activeSellerName} activeCobroId={activeCobroId} cobros={cobros} />
           </ErrorBoundary>
         )}
         {activeTab === 'configuracion' && 
           <ErrorBoundary key="configuracion" message="Error al cargar la configuración">
-          <Configuracion createSeller={createSeller} createProduct={createProduct} sellers={sellers} products={products} updateSeller={(id, data) => updateEntity('sellers', id, data)} deleteSeller={(id) => deleteEntity('sellers', id)} updateProduct={(id, data) => updateEntity('products', id, data)} deleteProduct={(id) => deleteEntity('products', id)} createCustomer={createCustomer} customers={customers} activeSellerId={activeSellerId} updateCustomer={(id, data) => updateEntity('customers', id, data)} deleteCustomer={(id) => deleteEntity('customers', id)} isSubmitting={isSubmitting} loading={loading} />
+           <Configuracion createSeller={createSeller} createProduct={createProduct} sellers={sellers} products={products} updateSeller={(id, data) => updateEntity('sellers', id, data)} deleteSeller={(id) => deleteEntity('sellers', id)} updateProduct={(id, data) => updateEntity('products', id, data)} deleteProduct={(id) => deleteEntity('products', id)} createCustomer={createCustomer} customers={customers} activeSellerId={activeSellerId} updateCustomer={(id, data) => updateEntity('customers', id, data)} deleteCustomer={(id) => deleteEntity('customers', id)} isSubmitting={isSubmitting} loading={loading} cobros={cobros} />
           </ErrorBoundary>
         }
-        {activeTab === 'imprimir-cobros' && 
-          <ErrorBoundary key="imprimir-cobros" message="Error al cargar imprimir cobros">
-            <ImprimirCobros sellers={sellers} activeSellerId={activeSellerId} activeSellerName={activeSellerName} />
-          </ErrorBoundary>
-        }
+         {activeTab === 'imprimir-cobros' && 
+           <ErrorBoundary key="imprimir-cobros" message="Error al cargar imprimir cobros">
+             <ImprimirCobros sellers={sellers} activeSellerId={activeSellerId} activeSellerName={activeSellerName} activeCobroId={activeCobroId} cobros={cobros} />
+           </ErrorBoundary>
+         }
+          {activeTab === 'config-cobros' && 
+            <ErrorBoundary key="config-cobros" message="Error al cargar la configuración de cobros">
+              <ConfigCobros cobros={cobros} sellers={sellers} loading={loading} onSaved={() => loadAll()} />
+            </ErrorBoundary>
+         }
           </>
         )}
       </section>

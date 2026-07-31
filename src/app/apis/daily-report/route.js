@@ -7,19 +7,24 @@ export async function GET(request) {
     const { searchParams } = new URL(request.url);
     const date = searchParams.get("date");
     const sellerId = searchParams.get("sellerId") || null;
+    const cobroId = searchParams.get("cobroId") || null;
 
     if (!date) return fail(new Error("date requerido (YYYY-MM-DD)"), 400);
 
-    const p = [date];
-    let sellerFilter = "";
-    if (sellerId) {
-      p.push(sellerId);
-      sellerFilter = "AND id = $" + p.length + "::uuid";
-    }
+    const p = [date, sellerId, cobroId];
 
     const sql = `
-      WITH seller_list AS (
-        SELECT id, name FROM cobrokits.sellers WHERE status = 'activo' ${sellerFilter}
+      WITH cobro_sellers AS (
+        SELECT DISTINCT seller_id
+        FROM cobrokits.daily_seller_stock
+        WHERE stock_date = $1::date
+          AND ($3::uuid IS NULL OR cobro_id = $3::uuid)
+      ),
+      seller_list AS (
+        SELECT id, name FROM cobrokits.sellers
+        WHERE status = 'activo'
+          AND ($3::uuid IS NOT NULL OR $2::uuid IS NULL OR id = $2::uuid)
+          AND ($3::uuid IS NULL OR id IN (SELECT seller_id FROM cobro_sellers))
       ),
       daily_payments AS (
         SELECT
@@ -130,24 +135,40 @@ export async function GET(request) {
 export async function PUT(request) {
   try {
     const body = await request.json();
-    const { date, seller_id, gasto = 0, cnt_notes = "", entregado, saldo_anterior } = body;
+    const { date, seller_id } = body;
 
     if (!date || !seller_id) return fail(new Error("date y seller_id requeridos"), 400);
 
+    // Partial update: only persist the fields the user actually edited so
+    // auto-calculated columns (entregado, saldo_anterior) are not pinned.
+    const sets = [];
+    const params = [date, seller_id];
+    const colFor = {
+      gasto: "gasto",
+      cnt_notes: "cnt_notes",
+      entregado: "entregado",
+      saldo_anterior: "saldo_anterior",
+    };
+    for (const [key, col] of Object.entries(colFor)) {
+      if (body[key] !== undefined && body[key] !== null) {
+        params.push(body[key]);
+        sets.push(col);
+      }
+    }
+    if (sets.length === 0) return fail(new Error("Sin campos para actualizar"), 400);
+
+    const fieldsSql = sets.map((_, i) => `$${i + 3}`).join(", ");
     const [entry] = await query(
       `
-      INSERT INTO cobrokits.daily_seller_entries (entry_date, seller_id, gasto, cnt_notes, entregado, saldo_anterior)
-      VALUES ($1::date, $2::uuid, $3, $4, $5, $6)
+      INSERT INTO cobrokits.daily_seller_entries (entry_date, seller_id, ${sets.join(", ")})
+      VALUES ($1::date, $2::uuid, ${fieldsSql})
       ON CONFLICT (entry_date, seller_id)
       DO UPDATE SET
-        gasto           = EXCLUDED.gasto,
-        cnt_notes       = EXCLUDED.cnt_notes,
-        entregado       = EXCLUDED.entregado,
-        saldo_anterior  = EXCLUDED.saldo_anterior,
-        updated_at      = now()
+        ${sets.map(c => `${c} = EXCLUDED.${c}`).join(",\n        ")},
+        updated_at = now()
       RETURNING entry_date::text AS day, seller_id, gasto, cnt_notes, entregado, saldo_anterior
       `,
-      [date, seller_id, gasto, cnt_notes, entregado ?? null, saldo_anterior ?? null]
+      params
     );
 
     return ok({ entry });

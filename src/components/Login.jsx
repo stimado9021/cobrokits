@@ -69,7 +69,7 @@ export function Login({ onLogin, sellers = [] }) {
           <select className="login-select" value={sellerId} onChange={e => { setSellerId(e.target.value); setError(""); }}>
             <option value="">Selecciona tu nombre</option>
             {sellers.filter(s => s.status === "activo").map(s => (
-              <option key={s.id} value={s.id}>{s.name}</option>
+              <option key={s.id} value={s.id}>{s.name.toUpperCase()}</option>
             ))}
           </select>
         )}

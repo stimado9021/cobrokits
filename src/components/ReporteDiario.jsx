@@ -86,7 +86,11 @@ function metricCellClass(col) {
 }
 
 /* ─── Component ─────────────────────────────────────────── */
-export function ReporteDiario({ activeSellerId = "", activeSellerName = "Todos los vendedores" }) {
+export function ReporteDiario({ activeSellerId = "", activeSellerName = "Todos los vendedores", activeCobroId = "", cobros = [] }) {
+  const activeCobroName = cobros.find(c => c.id === activeCobroId)?.name?.toUpperCase() || "";
+  const scopeName = activeCobroId ? activeCobroName : activeSellerName;
+  const scopeLabel = activeCobroId ? "Cobro" : "Vendedor";
+
   const [currentDate, setCurrentDate] = useState(() => {
     return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Bogota" }).format(new Date());
   });
@@ -109,7 +113,8 @@ export function ReporteDiario({ activeSellerId = "", activeSellerName = "Todos l
     setLoading(true);
     try {
       const params = new URLSearchParams({ date });
-      if (activeSellerId) params.set("sellerId", activeSellerId);
+      if (activeCobroId) params.set("cobroId", activeCobroId);
+      else if (activeSellerId) params.set("sellerId", activeSellerId);
       const res = await fetch(`/apis/daily-report?${params.toString()}`, { signal: controller.signal });
       if (controller.signal.aborted) return;
       const data = await res.json();
@@ -131,7 +136,7 @@ export function ReporteDiario({ activeSellerId = "", activeSellerName = "Todos l
       if (err?.name !== "AbortError") console.error("loadDay error:", err);
     }
     finally { if (abortRef.current === controller) setLoading(false); }
-  }, [activeSellerId]);
+  }, [activeSellerId, activeCobroId]);
 
   useEffect(() => {
     loadDay(currentDate);
@@ -188,20 +193,17 @@ export function ReporteDiario({ activeSellerId = "", activeSellerName = "Todos l
     }
     setEditing(null);
 
-    const updatedGasto = key === "gasto" ? n(value) : n(sellerData.gasto);
-    const updatedEntregado = key === "dinero_a_entregar" ? n(value) : n(sellerData.dinero_a_entregar);
-    const updatedSaldoAnterior = key === "saldo_anterior" ? n(value) : (sellerData.saldo_anterior != null ? n(sellerData.saldo_anterior) : null);
-
     setSaving(true);
     try {
       const payload = {
         date: currentDate,
         seller_id: sellerData.seller_id,
-        gasto: n(updatedGasto),
-        cnt_notes: sellerData.cnt_notes || "",
-        entregado: updatedEntregado,
-        saldo_anterior: updatedSaldoAnterior,
       };
+      if (key === "gasto") payload.gasto = n(value);
+      else if (key === "cnt_notes") payload.cnt_notes = value;
+      else if (key === "dinero_a_entregar") payload.entregado = n(value);
+      else if (key === "saldo_anterior") payload.saldo_anterior = n(value);
+      else return;
       const res = await fetch("/apis/daily-report", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -362,7 +364,7 @@ export function ReporteDiario({ activeSellerId = "", activeSellerName = "Todos l
           <h1 style="margin:0; font-size:20px; color:#7c3aed;">CobroKits</h1>
           <p style="margin:2px 0 0; font-size:11px; color:#666;">Reporte Diario</p>
           <h2 style="margin:10px 0 0; font-size:16px;">${formatDayLabel(currentDate)}</h2>
-          <p style="margin:2px 0 0; font-size:11px; color:#333;">Vendedor: <strong>${activeSellerName}</strong></p>
+          <p style="margin:2px 0 0; font-size:11px; color:#333;">${scopeLabel}: <strong>${scopeName}</strong></p>
         </div>
         <table style="width:100%; border-collapse:collapse; margin-bottom:16px;">
           <thead>
@@ -416,7 +418,7 @@ export function ReporteDiario({ activeSellerId = "", activeSellerName = "Todos l
           .computed { font-weight: bold; color: #1a1a1a; }
         </style></head><body>
         <h2 style="font-family:Arial;color:#7c3aed;">CobroKits - Reporte Diario</h2>
-        <p style="font-family:Arial;font-size:12px;">${formatDayLabel(currentDate)} · Vendedor: ${activeSellerName}</p>
+        <p style="font-family:Arial;font-size:12px;">${formatDayLabel(currentDate)} · ${scopeLabel}: ${scopeName}</p>
         <table>`;
 
       html += "<thead><tr>" + excelCols.map(c =>
@@ -499,7 +501,7 @@ export function ReporteDiario({ activeSellerId = "", activeSellerName = "Todos l
           </button>
         </div>
         <div className="reportes-seller-name">
-          Vendedor: <strong>{activeSellerName}</strong>
+          {scopeLabel}: <strong>{scopeName || "Todos los vendedores"}</strong>
         </div>
         <p className="reportes-hint">Las celdas en <span style={{color:"var(--brand)"}}>verde</span> son editables. Gasto y $ los ingresa el vendedor.</p>
       </div>
@@ -538,7 +540,7 @@ export function ReporteDiario({ activeSellerId = "", activeSellerName = "Todos l
             ) : sellers.map((row, i) => (
               <tr key={row.seller_id} className={i % 2 === 0 ? "row-even" : "row-odd"}>
                 <td className="wr-row-label">
-                  <span className="wr-label-text">{row.seller_name}</span>
+                  <span className="wr-label-text">{row.seller_name?.toUpperCase()}</span>
                 </td>
                 {COLS.map((col) => (
                   <td key={col.key} className={metricCellClass(col)}>

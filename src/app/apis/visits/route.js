@@ -79,10 +79,60 @@ export async function PATCH(request) {
   try {
     const body = await request.json();
     if (!body.id) return fail(new Error("ID de visita requerido"), 400);
-    if (typeof body.is_paid !== "boolean") return fail(new Error("Estado is_paid requerido"), 400);
 
-    await query("UPDATE cobrokits.customer_visits SET is_paid = $1 WHERE id = $2", [body.is_paid, body.id]);
-    return ok({ success: true });
+    // Toggle "Cancelado" state from VendedorVentas
+    if (typeof body.is_paid === "boolean") {
+      await query("UPDATE cobrokits.customer_visits SET is_paid = $1 WHERE id = $2", [body.is_paid, body.id]);
+      return ok({ success: true });
+    }
+
+    // Edit saldo/venta/abono from RegistrarVisita
+    const hasEdits = ["previous_balance", "new_products_total", "payment_amount", "payment_method"]
+      .some(k => body[k] !== undefined);
+    if (!hasEdits) return fail(new Error("No hay campos para actualizar"), 400);
+
+    const [visit] = await query("SELECT * FROM cobrokits.customer_visits WHERE id = $1", [body.id]);
+    if (!visit) return fail(new Error("Visita no encontrada"), 404);
+
+    const previous_balance = body.previous_balance !== undefined ? Number(body.previous_balance) : Number(visit.previous_balance);
+    const new_products_total = body.new_products_total !== undefined ? Number(body.new_products_total) : Number(visit.new_products_total);
+    const payment_amount = body.payment_amount !== undefined ? Number(body.payment_amount) : Number(visit.payment_amount);
+    if (previous_balance < 0 || new_products_total < 0 || payment_amount < 0) {
+      return fail(new Error("Los valores no pueden ser negativos"), 400);
+    }
+    const new_balance = previous_balance + new_products_total - payment_amount;
+    if (new_balance < 0) return fail(new Error("El abono no puede superar el saldo disponible"), 400);
+    let payment_method = body.payment_method !== undefined ? body.payment_method : visit.payment_method;
+    if (payment_amount > 0 && !payment_method) payment_method = "efectivo";
+
+    await query(
+      `UPDATE cobrokits.customer_visits
+       SET previous_balance = $2, new_products_total = $3, payment_amount = $4,
+           payment_method = $5, new_balance = $6
+       WHERE id = $1`,
+      [body.id, previous_balance, new_products_total, payment_amount, payment_method, new_balance],
+    );
+
+    // Re-sync the payment record
+    await query(`DELETE FROM cobrokits.payments WHERE visit_id = $1`, [body.id]);
+    if (payment_amount > 0) {
+      await query(
+        `INSERT INTO cobrokits.payments (visit_id, customer_id, seller_id, amount, method, notes)
+         VALUES ($1, $2, $3, $4, $5, $6)`,
+        [body.id, visit.customer_id, visit.seller_id, payment_amount, payment_method, visit.notes],
+      );
+    }
+
+    // Re-sync the customer balance by the delta
+    const delta = new_balance - Number(visit.new_balance);
+    if (delta !== 0) {
+      await query(
+        `UPDATE cobrokits.customers SET current_balance = current_balance + $2 WHERE id = $1`,
+        [visit.customer_id, delta],
+      );
+    }
+
+    return ok({ success: true, new_balance });
   } catch (error) {
     return fail(error, 500);
   }

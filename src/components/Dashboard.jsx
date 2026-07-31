@@ -45,6 +45,8 @@ export function Dashboard({
   loading,
   activeSellerId = "",
   activeSellerName = "Todos los vendedores",
+  activeCobroId = "",
+  activeCobroName = "",
 }) {
   const totals = dashboard?.totals || {};
   const sellers = dashboard?.sellers || [];
@@ -57,7 +59,9 @@ export function Dashboard({
     (balance) => balance.visit_day === todayDow
   );
   const filteredBalances = todayBalances.filter(
-    (balance) => !activeSellerId || balance.seller_id === activeSellerId,
+    (balance) =>
+      (!activeCobroId || balance.cobro_id === activeCobroId) &&
+      (!activeSellerId || balance.seller_id === activeSellerId),
   );
   
   // Meta del vendedor activo (o global si no hay filtro)
@@ -128,7 +132,7 @@ export function Dashboard({
           <div className="panelHead">
             <div>
               <h2>Clientes a visitar hoy</h2>
-              <span>{activeSellerName} · Meta: {formatMoney(sellerTargetToday)}</span>
+              <span>{activeCobroId ? activeCobroName : activeSellerName} · Meta: {formatMoney(sellerTargetToday)}</span>
             </div>
             {loading
               ? <SkeletonLine width="20px" height="1rem" />
@@ -141,8 +145,8 @@ export function Dashboard({
               : filteredBalances.map((balance) => (
                   <article key={balance.customer_id} className="listItem">
                     <div>
-                      <strong>{balance.customer_name}</strong>
-                      <span>{balance.seller_name} · {formatMoney(balance.current_balance)}</span>
+                      <strong>{balance.customer_name?.toUpperCase()}</strong>
+                      <span>{balance.seller_name?.toUpperCase()} · {formatMoney(balance.current_balance)}</span>
                     </div>
                     <b>{formatMoney(balance.current_balance)}</b>
                   </article>
@@ -161,7 +165,7 @@ export function Dashboard({
               <article className="listItem">
                 <div>
                   <strong>Sin clientes programados para hoy</strong>
-                  <span>{activeSellerName}</span>
+                  <span>{activeCobroId ? activeCobroName : activeSellerName}</span>
                 </div>
               </article>
             )}
@@ -186,7 +190,7 @@ export function Dashboard({
                   return (
                     <article key={seller.seller_id} className="listItem">
                       <div>
-                        <strong>{seller.seller_name}</strong>
+                        <strong>{seller.seller_name?.toUpperCase()}</strong>
                         <span>
                           Meta: {formatMoney(meta)} · Cobrado: {formatMoney(cobrado)} · Pendiente: {formatMoney(pendiente > 0 ? pendiente : 0)}
                         </span>

@@ -19,7 +19,11 @@ function formatDate(dateStr) {
   });
 }
 
-export function ImprimirCobros({ sellers, activeSellerId, activeSellerName }) {
+export function ImprimirCobros({ sellers, activeSellerId, activeSellerName, activeCobroId = "", cobros = [] }) {
+  const activeCobroName = cobros.find(c => c.id === activeCobroId)?.name?.toUpperCase() || "";
+  const scopeName = activeCobroId ? activeCobroName : (activeSellerId ? activeSellerName : "Todos");
+  const scopeLabel = activeCobroId ? "Cobro" : "Vendedor";
+
   const today = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Bogota" }).format(new Date());
   const [selectedDate, setSelectedDate] = useState(today);
   const [customers, setCustomers] = useState(null);
@@ -34,7 +38,8 @@ export function ImprimirCobros({ sellers, activeSellerId, activeSellerName }) {
     setError("");
     try {
       const params = new URLSearchParams({ date: selectedDate });
-      if (activeSellerId) params.set("sellerId", activeSellerId);
+      if (activeCobroId) params.set("cobroId", activeCobroId);
+      else if (activeSellerId) params.set("sellerId", activeSellerId);
       const res = await fetch(`/apis/collection-report?${params}`);
       const data = await res.json();
       if (!data.success) throw new Error(data.message || "Error al cargar reporte");
@@ -45,7 +50,7 @@ export function ImprimirCobros({ sellers, activeSellerId, activeSellerName }) {
     } finally {
       setLoading(false);
     }
-  }, [selectedDate, activeSellerId]);
+  }, [selectedDate, activeSellerId, activeCobroId]);
 
   useEffect(() => {
     loadReport();
@@ -68,7 +73,7 @@ export function ImprimirCobros({ sellers, activeSellerId, activeSellerName }) {
         const bg = i % 2 === 0 ? "#f9f9f9" : "#fff";
         rows += `<tr style="background:${bg};">
           <td style="padding:6px 8px;text-align:center;border-bottom:1px solid #e5e7eb;">${i + 1}</td>
-          <td style="padding:6px 8px;text-align:left;font-weight:600;border-bottom:1px solid #e5e7eb;">${c.name}</td>
+          <td style="padding:6px 8px;text-align:left;font-weight:600;border-bottom:1px solid #e5e7eb;">${c.name.toUpperCase()}</td>
           <td style="padding:6px 8px;text-align:center;border-bottom:1px solid #e5e7eb;">$${Number(c.current_balance).toLocaleString("es-CO")}</td>
           <td style="padding:6px 8px;text-align:center;border-bottom:1px solid #e5e7eb;">${c.last_visit_date ? "$" + Number(c.last_payment).toLocaleString("es-CO") : "–"}</td>
           <td style="padding:6px 8px;text-align:left;border-bottom:1px solid #e5e7eb;">${c.last_products_summary || "–"}</td>
@@ -80,7 +85,7 @@ export function ImprimirCobros({ sellers, activeSellerId, activeSellerName }) {
           <h1 style="margin:0;font-size:20px;color:#7c3aed;">CobroKits</h1>
           <p style="margin:2px 0 0;font-size:11px;color:#666;">Reporte de Cobros</p>
           <h2 style="margin:10px 0 0;font-size:16px;">${formatDate(selectedDate)}</h2>
-          <p style="margin:2px 0 0;font-size:11px;color:#333;">Vendedor: <strong>${activeSellerId ? activeSellerName : "Todos"}</strong></p>
+          <p style="margin:2px 0 0;font-size:11px;color:#333;">${scopeLabel}: <strong>${scopeName}</strong></p>
         </div>
         <table style="width:100%;border-collapse:collapse;margin-bottom:16px;">
           <thead>
@@ -116,13 +121,13 @@ export function ImprimirCobros({ sellers, activeSellerId, activeSellerName }) {
     if (generatingExcel || !customers?.length) return;
     setGeneratingExcel(true);
     try {
-      const sellerLabel = activeSellerId ? activeSellerName : "Todos";
+      const sellerLabel = activeCobroId ? scopeName : (activeSellerId ? activeSellerName : "Todos");
 
       let rows = "";
       customers.forEach((c, i) => {
         rows += `<tr>
           <td style="text-align:center;">${i + 1}</td>
-          <td>${c.name}</td>
+          <td>${c.name.toUpperCase()}</td>
           <td style="text-align:right;">${Number(c.current_balance).toLocaleString("es-CO")}</td>
           <td style="text-align:right;">${c.last_visit_date ? Number(c.last_payment).toLocaleString("es-CO") : "–"}</td>
           <td>${c.last_products_summary || "–"}</td>
@@ -226,7 +231,7 @@ export function ImprimirCobros({ sellers, activeSellerId, activeSellerName }) {
               {customers.map((c, i) => (
                 <tr key={c.id}>
                   <td>{i + 1}</td>
-                  <td style={{ fontWeight: 600 }}>{c.name}</td>
+                  <td style={{ fontWeight: 600 }}>{c.name.toUpperCase()}</td>
                   <td>{money(c.current_balance)}</td>
                   <td>
                     {c.last_visit_date ? money(c.last_payment) : "–"}

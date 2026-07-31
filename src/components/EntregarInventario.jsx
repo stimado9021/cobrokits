@@ -1,12 +1,22 @@
-import { useEffect, useMemo, useState, useCallback } from "react";
+import { useEffect, useMemo, useState, useCallback, useRef } from "react";
 import { PackagePlus, RotateCcw, Calendar, FileDown, FileSpreadsheet } from "lucide-react";
+
+const dayNames = ["Domingo", "Lunes", "Martes", "Miércoles", "Jueves", "Viernes", "Sábado"];
 
 function hoyColombia() {
   return new Intl.DateTimeFormat("en-CA", { timeZone: "America/Bogota" }).format(new Date());
 }
 
+function hoyColombiaDow() {
+  const d = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Bogota" }));
+  return d.getDay();
+}
+
 export function EntregarInventario({
   sellers,
+  cobros = [],
+  activeCobroId = "",
+  setActiveCobroId,
   activeSellerId,
   products,
   formatMoney,
@@ -25,6 +35,7 @@ export function EntregarInventario({
 
   const [deliveryQuantities, setDeliveryQuantities] = useState({});
   const [deliveryError, setDeliveryError] = useState("");
+  const [deliveryCommitted, setDeliveryCommitted] = useState(false);
   const [generatingPdf, setGeneratingPdf] = useState(false);
   const [generatingExcel, setGeneratingExcel] = useState(false);
 
@@ -32,11 +43,20 @@ export function EntregarInventario({
     setSelectedSellerId(activeSellerId || "");
   }, [activeSellerId]);
 
+  // Reset seller when the cobro changes from the sidebar (the cobro select's own
+  // onChange only fires on manual changes to this component's select).
+  const firstRenderRef = useRef(true);
+  useEffect(() => {
+    if (firstRenderRef.current) { firstRenderRef.current = false; return; }
+    setSelectedSellerId("");
+  }, [activeCobroId]);
+
   // Reset delivery form when seller changes
   useEffect(() => {
     setDeliveryQuantities({});
     setDeliveryError("");
     setCloseResult(null);
+    setDeliveryCommitted(false);
   }, [selectedSellerId]);
 
   // Clear closeResult when viewDate changes
@@ -48,16 +68,20 @@ export function EntregarInventario({
 
   // ─── Load available dates (lightweight) ───────────
   useEffect(() => {
-    if (!selectedSellerId) { setAvailableDates([]); return; }
+    if (!activeCobroId && !selectedSellerId) { setAvailableDates([]); return; }
     let cancelled = false;
-    fetch(`/apis/daily-stock?sellerId=${selectedSellerId}&action=dates`)
+    const params = new URLSearchParams();
+    if (activeCobroId) params.set("cobroId", activeCobroId);
+    else params.set("sellerId", selectedSellerId);
+    params.set("action", "dates");
+    fetch(`/apis/daily-stock?${params}`)
       .then(r => r.json())
       .then(data => {
         if (!cancelled && data.success) setAvailableDates(data.dates || []);
       })
       .catch(() => { if (!cancelled) setAvailableDates([]); });
     return () => { cancelled = true; };
-  }, [selectedSellerId]);
+  }, [activeCobroId, selectedSellerId]);
 
   // ─── Load warehouse stock ONCE per seller (not per date) ─────
   useEffect(() => {
@@ -81,12 +105,16 @@ export function EntregarInventario({
     return () => clearInterval(interval);
   }, []);
 
-  // ─── Load daily stock for the selected date ───────
+  // ─── Load daily stock for the selected cobro/seller and date ───────
   useEffect(() => {
-    if (!selectedSellerId) { setDailyItems([]); return; }
+    if (!activeCobroId && !selectedSellerId) { setDailyItems([]); return; }
     let cancelled = false;
     setLoading(true);
-    fetch(`/apis/daily-stock?sellerId=${selectedSellerId}&stockDate=${viewDate}`)
+    const params = new URLSearchParams();
+    if (activeCobroId) params.set("cobroId", activeCobroId);
+    else params.set("sellerId", selectedSellerId);
+    params.set("stockDate", viewDate);
+    fetch(`/apis/daily-stock?${params}`)
       .then(r => r.json())
       .then(data => {
         if (!cancelled && data.success) setDailyItems(data.items || []);
@@ -94,18 +122,22 @@ export function EntregarInventario({
       .catch(() => { if (!cancelled) setDailyItems([]); })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [selectedSellerId, viewDate]);
+  }, [activeCobroId, selectedSellerId, viewDate]);
 
   useEffect(() => {
-    if (!selectedSellerId) return;
+    if (!activeCobroId && !selectedSellerId) return;
     const interval = setInterval(() => {
-      fetch(`/apis/daily-stock?sellerId=${selectedSellerId}&stockDate=${viewDate}`)
+      const params = new URLSearchParams();
+      if (activeCobroId) params.set("cobroId", activeCobroId);
+      else params.set("sellerId", selectedSellerId);
+      params.set("stockDate", viewDate);
+      fetch(`/apis/daily-stock?${params}`)
         .then(r => r.json())
         .then(data => { if (data.success) setDailyItems(data.items || []); })
         .catch(() => {});
     }, 15000);
     return () => clearInterval(interval);
-  }, [selectedSellerId, viewDate]);
+  }, [activeCobroId, selectedSellerId, viewDate]);
 
   const whMap = useMemo(() => {
     const map = {};
@@ -117,13 +149,17 @@ export function EntregarInventario({
   const isToday = viewDate === todayDate;
 
   // ─── Effective warehouse stock = on-hand minus queued items ────
+  // Once a delivery is committed, the warehouse already reflects the reduction,
+  // so we stop subtracting (the form keeps the delivered quantities visible).
   const effectiveWhMap = useMemo(() => {
     const map = { ...whMap };
-    Object.entries(deliveryQuantities).forEach(([product_id, quantity]) => {
-      map[product_id] = Math.max(0, (map[product_id] || 0) - quantity);
-    });
+    if (!deliveryCommitted) {
+      Object.entries(deliveryQuantities).forEach(([product_id, quantity]) => {
+        map[product_id] = Math.max(0, (map[product_id] || 0) - quantity);
+      });
+    }
     return map;
-  }, [whMap, deliveryQuantities]);
+  }, [whMap, deliveryQuantities, deliveryCommitted]);
 
   // ─── Daily rows (deduplicated by product) ────────
   const dailyRows = useMemo(() => {
@@ -149,6 +185,25 @@ export function EntregarInventario({
 
   const inversionVendido = useMemo(() => dailyRows.reduce((sum, r) => sum + (r.sold * r.investment_cost), 0), [dailyRows]);
   const ventaVendido = useMemo(() => dailyRows.reduce((sum, r) => sum + (r.sold * r.sale_price), 0), [dailyRows]);
+
+  // ─── Seller already assigned to this cobro (from the stock delivered that day) ───
+  const assignedSellerIds = useMemo(
+    () => [...new Set(dailyItems.map(i => i.seller_id).filter(Boolean))],
+    [dailyItems],
+  );
+  const assignedSellerId = assignedSellerIds.length > 0 ? assignedSellerIds[0] : null;
+  const assignedSellerName = useMemo(
+    () => sellers.find(s => s.id === assignedSellerId)?.name?.toUpperCase() || "vendedor",
+    [sellers, assignedSellerId],
+  );
+
+  // Auto-select the assigned seller when the cobro already has stock for the viewed date
+  useEffect(() => {
+    if (loading || !assignedSellerId) return;
+    if (selectedSellerId !== assignedSellerId) {
+      setSelectedSellerId(assignedSellerId);
+    }
+  }, [assignedSellerId, selectedSellerId, loading, viewDate]);
 
   // ─── Delivery form handlers ───────────────────────
   function updateDeliveryQty(productId, value) {
@@ -191,19 +246,29 @@ export function EntregarInventario({
         body: JSON.stringify({
           action: "deliver_batch",
           seller_id: selectedSellerId,
+          cobro_id: activeCobroId || null,
           stock_date: todayDate,
           items: items.map(i => ({ product_id: i.product_id, quantity: i.quantity })),
         }),
       });
       const data = await res.json();
       if (data.success) {
-        setDeliveryQuantities({});
-        // Reload daily stock for today
-        const dsRes = await fetch(`/apis/daily-stock?sellerId=${selectedSellerId}&stockDate=${todayDate}`);
+        setDeliveryCommitted(true);
+        // Keep the delivered quantities visible in the form (same cobro y vendedor)
+        // Reload daily stock for today so the side card shows the delivery
+        const dsParams = new URLSearchParams();
+        if (activeCobroId) dsParams.set("cobroId", activeCobroId);
+        else if (selectedSellerId) dsParams.set("sellerId", selectedSellerId);
+        dsParams.set("stockDate", todayDate);
+        const dsRes = await fetch(`/apis/daily-stock?${dsParams}`);
         const dsData = await dsRes.json();
         if (dsData.success) setDailyItems(dsData.items || []);
         // Reload available dates
-        const datesRes = await fetch(`/apis/daily-stock?sellerId=${selectedSellerId}&action=dates`);
+        const datesParams = new URLSearchParams();
+        if (activeCobroId) datesParams.set("cobroId", activeCobroId);
+        else if (selectedSellerId) datesParams.set("sellerId", selectedSellerId);
+        datesParams.set("action", "dates");
+        const datesRes = await fetch(`/apis/daily-stock?${datesParams}`);
         const datesData = await datesRes.json();
         if (datesData.success) setAvailableDates(datesData.dates || []);
         if (onDelivered) onDelivered();
@@ -238,11 +303,19 @@ export function EntregarInventario({
       if (data.success) {
         setCloseResult(data.closed);
         // Reload daily stock for the view date
-        const dsRes = await fetch(`/apis/daily-stock?sellerId=${selectedSellerId}&stockDate=${viewDate}`);
+        const dsParams = new URLSearchParams();
+        if (activeCobroId) dsParams.set("cobroId", activeCobroId);
+        else if (selectedSellerId) dsParams.set("sellerId", selectedSellerId);
+        dsParams.set("stockDate", viewDate);
+        const dsRes = await fetch(`/apis/daily-stock?${dsParams}`);
         const dsData = await dsRes.json();
         if (dsData.success) setDailyItems(dsData.items || []);
         // Reload dates
-        const datesRes = await fetch(`/apis/daily-stock?sellerId=${selectedSellerId}&action=dates`);
+        const datesParams = new URLSearchParams();
+        if (activeCobroId) datesParams.set("cobroId", activeCobroId);
+        else if (selectedSellerId) datesParams.set("sellerId", selectedSellerId);
+        datesParams.set("action", "dates");
+        const datesRes = await fetch(`/apis/daily-stock?${datesParams}`);
         const datesData = await datesRes.json();
         if (datesData.success) setAvailableDates(datesData.dates || []);
       } else {
@@ -255,7 +328,8 @@ export function EntregarInventario({
     }
   }
 
-  const canCloseDay = !isPastDay && dailyRows.length > 0 && !dailyRows.every(r => r.is_closed);
+  const canCloseDay = !!selectedSellerId && !isPastDay && dailyRows.length > 0 && !dailyRows.every(r => r.is_closed);
+  const cobroHasStock = !!activeCobroId && isToday && dailyItems.length > 0;
 
   // ─── PDF generation ────────────────────────────────
   async function generatePdf() {
@@ -264,7 +338,7 @@ export function EntregarInventario({
     try {
       const html2pdf = (await import("html2pdf.js")).default;
 
-      const sellerName = sellers.find(s => s.id === selectedSellerId)?.name || "Vendedor";
+      const sellerName = sellers.find(s => s.id === selectedSellerId)?.name?.toUpperCase() || "VENDEDOR";
       const today = new Intl.DateTimeFormat("es-CO", {
         timeZone: "America/Bogota",
         year: "numeric", month: "long", day: "numeric",
@@ -307,7 +381,7 @@ export function EntregarInventario({
               return `
               <tr style="background: ${i % 2 === 0 ? "#f9f9f9" : "#fff"};">
                 <td style="padding: 8px 12px; font-size: 12px; color: #666;">${i + 1}</td>
-                <td style="padding: 8px 12px; font-size: 13px; font-weight: 500;">${item.product_name}${item.is_closed ? ' <span style="font-size:10px;color:#3B82F6;">(Cerrado)</span>' : ""}</td>
+                <td style="padding: 8px 12px; font-size: 13px; font-weight: 500;">${item.product_name} <span style="font-size:11px;color:#666;">${formatMoney(item.investment_cost)}/${formatMoney(item.sale_price)}</span>${item.is_closed ? ' <span style="font-size:10px;color:#3B82F6;">(Cerrado)</span>' : ""}</td>
                 <td style="padding: 8px 12px; text-align: center; font-size: 13px;">${item.delivered}</td>
                 <td style="padding: 8px 12px; text-align: center; font-size: 13px;">${item.sold}</td>
                 <td style="padding: 8px 12px; text-align: center; font-size: 14px; font-weight: bold; color: ${item.remaining > 0 ? "#16a34a" : "#dc2626"};">${item.is_closed ? 0 : item.remaining}</td>
@@ -356,7 +430,7 @@ export function EntregarInventario({
     if (generatingExcel || dailyRows.length === 0) return;
     setGeneratingExcel(true);
     try {
-      const sellerName = sellers.find(s => s.id === selectedSellerId)?.name || "Vendedor";
+      const sellerName = sellers.find(s => s.id === selectedSellerId)?.name?.toUpperCase() || "VENDEDOR";
       const today = new Intl.DateTimeFormat("es-CO", {
         timeZone: "America/Bogota",
         year: "numeric", month: "long", day: "numeric",
@@ -397,7 +471,7 @@ export function EntregarInventario({
         const saleRow = item.sold * item.sale_price;
         html += `<tr style="background:${bg};">
           <td class="label">${i + 1}</td>
-          <td class="label">${item.product_name}${item.is_closed ? " (Cerrado)" : ""}</td>
+          <td class="label">${item.product_name} <span style="font-size:10px;color:#666;">${formatMoney(item.investment_cost)}/${formatMoney(item.sale_price)}</span>${item.is_closed ? " (Cerrado)" : ""}</td>
           <td>${item.delivered}</td>
           <td>${item.sold}</td>
           <td class="${cls}">${item.is_closed ? 0 : item.remaining}</td>
@@ -442,15 +516,39 @@ export function EntregarInventario({
           <PackagePlus size={18} />
         </div>
         <select
-          value={selectedSellerId}
-          onChange={(e) => setSelectedSellerId(e.target.value)}
+          value={activeCobroId}
+          onChange={(e) => { setActiveCobroId(e.target.value); setSelectedSellerId(""); }}
           required
         >
-          <option value="">Vendedor</option>
-          {sellers.map((seller) => (
-            <option key={seller.id} value={seller.id}>{seller.name}</option>
+          <option value="">Selecciona un cobro</option>
+          {cobros.filter(c => c.day_of_week === hoyColombiaDow() && c.is_active).map((cobro) => (
+            <option key={cobro.id} value={cobro.id}>{cobro.name.toUpperCase()}</option>
           ))}
         </select>
+        {activeCobroId && (
+          <select
+            value={selectedSellerId}
+            onChange={(e) => {
+              const next = e.target.value;
+              if (assignedSellerIds.length > 0 && next !== assignedSellerId) {
+                alert(`Este cobro ya tiene asignado el vendedor ${assignedSellerName} para el día ${viewDate}. No se puede cambiar.`);
+                return;
+              }
+              setSelectedSellerId(next);
+            }}
+            required
+          >
+            <option value="">Selecciona un vendedor</option>
+            {sellers.map((seller) => (
+              <option key={seller.id} value={seller.id}>{seller.name.toUpperCase()}</option>
+            ))}
+          </select>
+        )}
+        {cobroHasStock && (
+          <p style={{ fontSize: "12px", color: "var(--red)", margin: "4px 0", fontWeight: "bold" }}>
+            Este cobro ya tiene stock asignado para hoy a {assignedSellerName}. No se puede volver a entregar.
+          </p>
+        )}
         <div className="row" style={{ overflowX: "auto" }}>
           <table className="dataTable" style={{ width: "100%", fontSize: "12px", borderCollapse: "collapse" }}>
             <thead>
@@ -467,7 +565,7 @@ export function EntregarInventario({
                 const stock = effectiveWhMap[p.id] ?? 0;
                 return (
                   <tr key={p.id}>
-                    <td style={{ padding: "3px 8px", fontSize: "12px" }}>{p.name}</td>
+                    <td style={{ padding: "3px 8px", fontSize: "12px" }}>{p.name.toUpperCase()}</td>
                     <td style={{ padding: "3px 8px", textAlign: "center", fontWeight: "bold", fontSize: "12px" }}>{stock}</td>
                     <td style={{ padding: "3px 8px", textAlign: "center", fontSize: "12px" }}>{formatMoney(p.investment_cost)}</td>
                     <td style={{ padding: "3px 8px", textAlign: "center", fontSize: "12px" }}>{formatMoney(p.sale_price)}</td>
@@ -479,7 +577,7 @@ export function EntregarInventario({
                         value={deliveryQuantities[p.id] || ""}
                         onChange={(e) => updateDeliveryQty(p.id, e.target.value)}
                         style={{ width: "60px", textAlign: "center", padding: "3px 6px", fontSize: "12px", minHeight: "28px" }}
-                        disabled={stock === 0}
+                        disabled={stock === 0 || cobroHasStock}
                       />
                     </td>
                   </tr>
@@ -491,19 +589,25 @@ export function EntregarInventario({
         {deliveryError && (
           <p style={{ fontSize: "12px", color: "var(--red)", margin: "4px 0" }}>{deliveryError}</p>
         )}
-        <button className="primary" type="submit" disabled={busy || !isToday || Object.keys(deliveryQuantities).length === 0}>
+        <button className="primary" type="submit" disabled={busy || !isToday || cobroHasStock || Object.keys(deliveryQuantities).length === 0}>
           {submitting ? <span className="spinner" /> : <PackagePlus size={17} />}
           {submitting ? "Entregando..." : "Entregar"}
         </button>
       </form>
 
-      {selectedSellerId && (
-        <div className="panel inventory-preview-panel">
-          <div className="panelHead inventory-day-head" style={{ justifyContent: "space-between" }}>
-            <h2>
-              Stock para <span>{sellers.find(s => s.id === selectedSellerId)?.name || "vendedor"}</span>
-            </h2>
+      <div className="panel inventory-preview-panel">
+        <div className="panelHead inventory-day-head" style={{ justifyContent: "space-between" }}>
+          <h2>
+            {activeCobroId ? (
+              <>Stock para <span>{cobros.find(c => c.id === activeCobroId)?.name?.toUpperCase() || "cobro"}</span></>
+            ) : (
+              <>Stock entregado</>
+            )}
+          </h2>
             <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+              {selectedSellerId && (
+                <span style={{ fontSize: "0.8rem", color: "var(--ink)" }}>Vendedor: {sellers.find(s => s.id === selectedSellerId)?.name?.toUpperCase() || "vendedor"}</span>
+              )}
               <button
                 className="iconButton"
                 onClick={generatePdf}
@@ -621,12 +725,12 @@ export function EntregarInventario({
                 </tfoot>
               )}
             </table>
+          ) : !activeCobroId ? (
+            <p>Selecciona un cobro y un vendedor para ver el stock entregado.</p>
           ) : (
             <p>No hay registros de stock para esta fecha.</p>
           )}
         </div>
-      )}
-
     </section>
   );
 }

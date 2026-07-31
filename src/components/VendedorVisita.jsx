@@ -9,7 +9,7 @@ function hoyColombiaDow() {
   return d.getDay();
 }
 
-export function VendedorVisita({ seller, customers = [], products = [], onVisit }) {
+export function VendedorVisita({ seller, customers = [], products = [], onVisit, cobroIds = [] }) {
 
   const [customerId, setCustomerId] = useState("");
   const [deliveryQuantities, setDeliveryQuantities] = useState({});
@@ -23,7 +23,7 @@ export function VendedorVisita({ seller, customers = [], products = [], onVisit 
   const [loadingStock, setLoadingStock] = useState(true);
 
   const todayDow = hoyColombiaDow();
-  const sellerCustomers = customers.filter(c => c.seller_id === seller.sellerId && c.visit_day === todayDow);
+  const sellerCustomers = customers.filter(c => c.cobro_id && cobroIds.includes(c.cobro_id) && c.visit_day === todayDow);
 
   useEffect(() => {
     let cancelled = false;
@@ -161,7 +161,7 @@ export function VendedorVisita({ seller, customers = [], products = [], onVisit 
                 const remaining = available - (deliveryQuantities[p.id] || 0);
                 return (
                   <tr key={p.id}>
-                    <td style={{ padding: "6px 8px", fontSize: "12px", borderBottom: "1px solid var(--line-light)" }}>{p.name}</td>
+                    <td style={{ padding: "6px 8px", fontSize: "12px", borderBottom: "1px solid var(--line-light)" }}>{p.name.toUpperCase()}</td>
                     <td style={{ padding: "6px 8px", textAlign: "center", fontWeight: "bold", fontSize: "12px", borderBottom: "1px solid var(--line-light)", color: remaining < available ? "var(--red)" : undefined }}>{remaining}</td>
                     <td style={{ padding: "6px 8px", textAlign: "center", borderBottom: "1px solid var(--line-light)" }}>
                       <input

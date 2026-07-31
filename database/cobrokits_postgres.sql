@@ -66,9 +66,28 @@ CREATE TABLE IF NOT EXISTS products (
   updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+CREATE TABLE IF NOT EXISTS cobros (
+  id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  name        VARCHAR(120) NOT NULL,
+  day_of_week SMALLINT NOT NULL CHECK (day_of_week BETWEEN 0 AND 6),
+  route       TEXT,
+  observation TEXT,
+  is_active   BOOLEAN NOT NULL DEFAULT true,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS cobro_sellers (
+  cobro_id   UUID NOT NULL REFERENCES cobrokits.cobros(id) ON DELETE CASCADE,
+  seller_id  UUID NOT NULL REFERENCES cobrokits.sellers(id) ON DELETE CASCADE,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (cobro_id, seller_id)
+);
+
 CREATE TABLE IF NOT EXISTS customers (
   id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  seller_id       UUID NOT NULL REFERENCES sellers(id),
+  seller_id       UUID REFERENCES sellers(id),
+  cobro_id        UUID REFERENCES cobrokits.cobros(id),
   name            VARCHAR(120) NOT NULL,
   address         TEXT NOT NULL,
   phone           VARCHAR(30),
@@ -113,6 +132,7 @@ CREATE TABLE IF NOT EXISTS customer_visits (
   payment_amount    NUMERIC(14,2) NOT NULL DEFAULT 0 CHECK (payment_amount >= 0),
   payment_method    payment_method,
   new_balance       NUMERIC(14,2) NOT NULL DEFAULT 0 CHECK (new_balance >= 0),
+  is_paid           BOOLEAN NOT NULL DEFAULT false,
   notes             TEXT,
   created_at        TIMESTAMPTZ NOT NULL DEFAULT now(),
   CONSTRAINT chk_payment_method_required CHECK (
@@ -146,6 +166,7 @@ CREATE TABLE IF NOT EXISTS payments (
 CREATE TABLE IF NOT EXISTS daily_seller_stock (
   id                UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   seller_id         UUID NOT NULL REFERENCES sellers(id),
+  cobro_id          UUID REFERENCES cobrokits.cobros(id),
   product_id        UUID NOT NULL REFERENCES products(id),
   stock_date        DATE NOT NULL DEFAULT CURRENT_DATE,
   quantity_delivered INTEGER NOT NULL DEFAULT 0 CHECK (quantity_delivered >= 0),
@@ -172,20 +193,29 @@ CREATE TABLE IF NOT EXISTS warehouse_stock_entries (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- Weekly report manual entries
+-- Weekly report manual entries (scoped by cobro/seller to avoid cross-seller leaks)
 CREATE TABLE IF NOT EXISTS weekly_manual_entries (
   id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   entry_date      DATE NOT NULL,
+  cobro_id        UUID REFERENCES cobrokits.cobros(id),
+  seller_id       UUID REFERENCES cobrokits.sellers(id),
   gasto           NUMERIC(14,2) NOT NULL DEFAULT 0,
   d1              NUMERIC(14,2) NOT NULL DEFAULT 0,
   d2              NUMERIC(14,2) NOT NULL DEFAULT 0,
   cnt_notes       TEXT,
-  entregado       NUMERIC(14,2) NOT NULL DEFAULT 0,
+  entregado       NUMERIC(14,2),
   saldo_anterior  NUMERIC(14,2),
   created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
-  UNIQUE (entry_date)
+  updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_weekly_manual_scope
+  ON weekly_manual_entries (entry_date, cobro_id, seller_id) NULLS NOT DISTINCT
+  WHERE cobro_id IS NOT NULL OR seller_id IS NOT NULL;
+
+CREATE UNIQUE INDEX IF NOT EXISTS uq_weekly_manual_legacy
+  ON weekly_manual_entries (entry_date)
+  WHERE cobro_id IS NULL AND seller_id IS NULL;
 
 -- Daily report per-seller manual entries (gasto, notes, entregado)
 CREATE TABLE IF NOT EXISTS daily_seller_entries (
@@ -356,11 +386,19 @@ BEGIN
   IF v_day_closed THEN
     RAISE EXCEPTION 'El vendedor ya ha cerrado el día %. No se pueden registrar más ventas.', p_visit_date;
   END IF;
-  -- Get customer with lock
+  -- Get customer with lock: must belong to a cobro assigned to this seller that day
   SELECT * INTO v_customer
-  FROM customers WHERE id = p_customer_id AND seller_id = p_seller_id AND is_active = true
+  FROM customers c
+  WHERE c.id = p_customer_id AND c.is_active = true
+    AND c.cobro_id IN (
+      SELECT DISTINCT dss.cobro_id
+      FROM daily_seller_stock dss
+      WHERE dss.seller_id = p_seller_id
+        AND dss.stock_date = p_visit_date
+        AND dss.cobro_id IS NOT NULL
+    )
   FOR UPDATE;
-  IF NOT FOUND THEN RAISE EXCEPTION 'Cliente no existe, esta inactivo o no pertenece al vendedor'; END IF;
+  IF NOT FOUND THEN RAISE EXCEPTION 'Cliente no existe, esta inactivo o no pertenece al cobro del día'; END IF;
   -- Validate visit_day
   v_visit_dow := EXTRACT(DOW FROM p_visit_date)::INT;
   IF v_customer.visit_day IS NOT NULL AND v_customer.visit_day != v_visit_dow THEN
@@ -447,7 +485,8 @@ $$;
 -- deliver_daily_stock: transfer from warehouse_stock to daily_seller_stock (with closed-day check)
 CREATE OR REPLACE FUNCTION deliver_daily_stock(
   p_seller_id UUID, p_product_id UUID, p_quantity INTEGER,
-  p_stock_date DATE DEFAULT CURRENT_DATE, p_notes TEXT DEFAULT NULL
+  p_stock_date DATE DEFAULT CURRENT_DATE, p_notes TEXT DEFAULT NULL,
+  p_cobro_id UUID DEFAULT NULL
 ) RETURNS TABLE (ret_seller_id UUID, ret_product_id UUID, ret_quantity_delivered INTEGER, ret_remaining_warehouse INTEGER)
 LANGUAGE plpgsql AS $$
 DECLARE
@@ -470,10 +509,12 @@ BEGIN
     RAISE EXCEPTION 'Stock en bodega insuficiente. Disponible: %, solicitado: %', v_warehouse_qty, p_quantity;
   END IF;
   UPDATE warehouse_stock SET quantity = quantity - p_quantity, updated_at = now() WHERE product_id = p_product_id;
-  INSERT INTO daily_seller_stock (seller_id, product_id, stock_date, quantity_delivered)
-  VALUES (p_seller_id, p_product_id, p_stock_date, p_quantity)
+  INSERT INTO daily_seller_stock (seller_id, cobro_id, product_id, stock_date, quantity_delivered)
+  VALUES (p_seller_id, p_cobro_id, p_product_id, p_stock_date, p_quantity)
   ON CONFLICT (seller_id, product_id, stock_date)
-  DO UPDATE SET quantity_delivered = daily_seller_stock.quantity_delivered + EXCLUDED.quantity_delivered, updated_at = now();
+  DO UPDATE SET quantity_delivered = daily_seller_stock.quantity_delivered + EXCLUDED.quantity_delivered,
+                cobro_id = EXCLUDED.cobro_id,
+                updated_at = now();
   INSERT INTO inventory_movements (seller_id, product_id, movement_type, quantity,
     unit_investment_cost, unit_sale_price, notes)
   VALUES (p_seller_id, p_product_id, 'entrega_diaria_vendedor', p_quantity,

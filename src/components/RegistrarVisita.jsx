@@ -18,6 +18,9 @@ function hoyColombiaDow() {
 
 export function RegistrarVisita({
   sellers,
+  cobros = [],
+  activeCobroId,
+  setActiveCobroId,
   activeSellerId,
   setActiveSellerId,
   activeCustomers,
@@ -41,6 +44,7 @@ export function RegistrarVisita({
   const [selectedDate, setSelectedDate] = useState(today);
   const [editingVisit, setEditingVisit] = useState(null);
   const [editValues, setEditValues] = useState({});
+  const [savingEdit, setSavingEdit] = useState(false);
 
   useEffect(() => {
     setSelectedCustomer("");
@@ -48,14 +52,17 @@ export function RegistrarVisita({
     setPaymentAmount("");
     setPaymentMethod("efectivo");
     setNotes("");
-  }, [activeSellerId]);
+  }, [activeSellerId, activeCobroId]);
 
   // ─── History panel ────────────────────────────────
   const sellerVisits = useMemo(
     () => visits
-      .filter((v) => !activeSellerId || v.seller_id === activeSellerId)
+      .filter((v) => {
+        if (activeCobroId) return activeCustomers.some((c) => c.id === v.customer_id);
+        return !activeSellerId || v.seller_id === activeSellerId;
+      })
       .sort((a, b) => new Date(a.visit_date) - new Date(b.visit_date)),
-    [visits, activeSellerId]
+    [visits, activeSellerId, activeCobroId, activeCustomers]
   );
 
   const availableDates = useMemo(() => {
@@ -82,14 +89,18 @@ export function RegistrarVisita({
   const [dailyStockItems, setDailyStockItems] = useState([]);
 
   useEffect(() => {
-    if (!activeSellerId) { setDailyStockItems([]); return; }
+    if (!activeCobroId && !activeSellerId) { setDailyStockItems([]); return; }
     let cancelled = false;
-    fetch(`/apis/daily-stock?sellerId=${activeSellerId}&stockDate=${today}`)
+    const params = new URLSearchParams();
+    if (activeCobroId) params.set("cobroId", activeCobroId);
+    else params.set("sellerId", activeSellerId);
+    params.set("stockDate", today);
+    fetch(`/apis/daily-stock?${params}`)
       .then(r => r.json())
       .then(data => { if (!cancelled && data.success) setDailyStockItems(data.items || []); })
       .catch(() => { if (!cancelled) setDailyStockItems([]); });
     return () => { cancelled = true; };
-  }, [activeSellerId, today]);
+  }, [activeCobroId, activeSellerId, today]);
 
   const stockMap = useMemo(() => {
     const map = {};
@@ -98,6 +109,21 @@ export function RegistrarVisita({
     });
     return map;
   }, [dailyStockItems]);
+
+  // ─── Seller is derived from the cobro's daily stock (chosen at delivery) ───
+  // Reset the stale seller whenever the cobro changes, then re-derive from stock.
+  useEffect(() => {
+    if (!activeCobroId) return;
+    setActiveSellerId("");
+  }, [activeCobroId]);
+
+  useEffect(() => {
+    if (!activeCobroId || !dailyStockItems.length) return;
+    const sellerIds = [...new Set(dailyStockItems.map((i) => i.seller_id).filter(Boolean))];
+    if (sellerIds.length === 1 && sellerIds[0] !== activeSellerId) {
+      setActiveSellerId(sellerIds[0]);
+    }
+  }, [dailyStockItems, activeCobroId]);
 
   const effectiveStockMap = useMemo(() => {
     const map = { ...stockMap };
@@ -148,7 +174,7 @@ export function RegistrarVisita({
     if (customer) {
       const visitDay = customer.visit_day !== null && customer.visit_day !== undefined ? Number(customer.visit_day) : null;
       if (visitDay !== null && visitDay !== todayDow) {
-        alert(`${customer.name} solo se visita los ${dayName(visitDay)}. Hoy es ${dayName(todayDow)}.`);
+        alert(`${customer.name.toUpperCase()} solo se visita los ${dayName(visitDay)}. Hoy es ${dayName(todayDow)}.`);
         return;
       }
     }
@@ -195,20 +221,20 @@ setDeliveryQuantities({});
           <h2>Registrar visita</h2>
           <Save size={18} />
         </div>
-        <select value={activeSellerId} onChange={(e) => setActiveSellerId(e.target.value)} required>
-          <option value="">Vendedor</option>
-          {sellers.map((s) => (
-            <option key={s.id} value={s.id}>{s.name}</option>
+        <select value={activeCobroId} onChange={(e) => setActiveCobroId(e.target.value)} required>
+          <option value="">Cobro</option>
+          {cobros.filter(c => c.day_of_week === todayDow && c.is_active).map((cobro) => (
+            <option key={cobro.id} value={cobro.id}>{cobro.name.toUpperCase()}</option>
           ))}
         </select>
-        <select value={selectedCustomer} onChange={(e) => setSelectedCustomer(e.target.value)} required>
-          <option value="">Cliente</option>
-          {activeCustomers.map((c) => {
-            const visitDay = c.visit_day !== null && c.visit_day !== undefined ? Number(c.visit_day) : null;
-            const isToday = visitDay !== null && visitDay === todayDow;
-            const label = visitDay !== null
-              ? `${c.name} (${dayName(visitDay)}) - ${formatMoney(c.current_balance)}`
-              : `${c.name} - ${formatMoney(c.current_balance)}`;
+         <select value={selectedCustomer} onChange={(e) => setSelectedCustomer(e.target.value)} required>
+           <option value="">Cliente</option>
+           {activeCustomers.map((c) => {
+             const visitDay = c.visit_day !== null && c.visit_day !== undefined ? Number(c.visit_day) : null;
+             const isToday = visitDay !== null && visitDay === todayDow;
+             const label = visitDay !== null
+               ? `${c.name.toUpperCase()} (${dayName(visitDay)}) - ${formatMoney(c.current_balance)}`
+               : `${c.name.toUpperCase()} - ${formatMoney(c.current_balance)}`;
             return (
               <option key={c.id} value={c.id} disabled={!isToday}>
                 {label} {isToday ? "✓" : ""}
@@ -216,9 +242,9 @@ setDeliveryQuantities({});
             );
           })}
         </select>
-        {!hasAnyStock && activeSellerId && (
+        {!hasAnyStock && activeCobroId && (
           <div className="notice" style={{ border: "1px solid rgba(239,68,68,0.3)", background: "rgba(239,68,68,0.1)", color: "var(--red)", margin: "0" }}>
-            Vendedor sin inventario hoy. Asígnele productos en "Entregar Inventario" primero.
+            Este cobro no tiene inventario hoy. Asígnele productos en "Entregar Inventario" primero.
           </div>
         )}
         {deliveryError && (
@@ -238,7 +264,7 @@ setDeliveryQuantities({});
                 const stock = effectiveStockMap[p.id] ?? 0;
                 return (
                   <tr key={p.id}>
-                    <td style={{ padding: "3px 8px", fontSize: "12px" }}>{p.name}</td>
+                    <td style={{ padding: "3px 8px", fontSize: "12px" }}>{p.name.toUpperCase()}</td>
                     <td style={{ padding: "3px 8px", textAlign: "center", fontWeight: "bold", fontSize: "12px" }}>{stock}</td>
                     <td style={{ padding: "3px 8px", textAlign: "center" }}>
                       <input
@@ -314,8 +340,11 @@ setDeliveryQuantities({});
       <section className="panel visitas-table-panel">
         <div className="panelHead">
           <div>
-            <h2>Visitas registradas</h2>
-            <span>{activeSellerName}</span>
+            <h2>
+              Visitas registradas del cobro:{" "}
+              <span>{cobros.find(c => c.id === activeCobroId)?.name?.toUpperCase() || "—"}</span>
+            </h2>
+            <span>Vendedor: {sellers.find(s => s.id === activeSellerId)?.name?.toUpperCase() || "—"}</span>
           </div>
           <ClipboardList size={18} />
         </div>
@@ -454,15 +483,43 @@ setDeliveryQuantities({});
                  )}
                </p>
              </div>
-             <button
-               className="primary"
-               onClick={() => {
-                 setEditingVisit(null);
-                 setEditValues({});
-               }}
-             >
-               Guardar
-             </button>
+              <button
+                className="primary"
+                disabled={savingEdit}
+                onClick={async () => {
+                  if (!editingVisit || savingEdit) return;
+                  const prev = Number(editValues.previous_balance ?? editingVisit.previous_balance);
+                  const sale = Number(editValues.sale_total ?? editingVisit.sale_total);
+                  const pay = Number(editValues.payment_amount ?? editingVisit.payment_total);
+                  if (prev < 0 || sale < 0 || pay < 0) { alert("Los valores no pueden ser negativos"); return; }
+                  setSavingEdit(true);
+                  try {
+                    const res = await fetch("/apis/visits", {
+                      method: "PATCH",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        id: editingVisit.id,
+                        previous_balance: prev,
+                        new_products_total: sale,
+                        payment_amount: pay,
+                        payment_method: editingVisit.payment_method || null,
+                      }),
+                    });
+                    const data = await res.json();
+                    if (!data.success) throw new Error(data.message || "Error al guardar");
+                    setEditingVisit(null);
+                    setEditValues({});
+                    if (onRegistered) onRegistered();
+                  } catch (e) {
+                    alert(e.message);
+                  } finally {
+                    setSavingEdit(false);
+                  }
+                }}
+              >
+                {savingEdit ? <span className="spinner" /> : null}
+                {savingEdit ? "Guardando..." : "Guardar"}
+              </button>
            </div>
          </Modal>
        )}

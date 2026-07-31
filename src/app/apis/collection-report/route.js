@@ -7,6 +7,7 @@ export async function GET(request) {
     const { searchParams } = new URL(request.url);
     const date = searchParams.get("date");
     const sellerId = searchParams.get("sellerId");
+    const cobroId = searchParams.get("cobroId");
 
     if (!date) return fail(new Error("Fecha requerida"), 400);
 
@@ -45,10 +46,11 @@ export async function GET(request) {
         ) last_visit ON true
         WHERE c.is_active = true
           AND c.visit_day = EXTRACT(DOW FROM $1::date)
-          AND ($2::uuid IS NULL OR c.seller_id = $2::uuid)
+          AND ($3::uuid IS NOT NULL OR $2::uuid IS NULL OR c.seller_id = $2::uuid)
+          AND ($3::uuid IS NULL OR c.cobro_id = $3::uuid)
         ORDER BY c.name
       `,
-      [date, sellerId || null],
+      [date, sellerId || null, cobroId || null],
     );
 
     return ok({ customers, date });

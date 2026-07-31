@@ -127,11 +127,12 @@ export async function GET() {
         c.address,
         c.seller_id,
         s.name AS seller_name,
+        c.cobro_id,
         c.current_balance,
         c.is_active,
         c.visit_day
       FROM cobrokits.customers c
-      JOIN cobrokits.sellers s ON s.id = c.seller_id
+      LEFT JOIN cobrokits.sellers s ON s.id = c.seller_id
       WHERE c.is_active = true AND c.current_balance > 0
       ORDER BY c.current_balance DESC, c.name
     `);

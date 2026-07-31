@@ -10,18 +10,20 @@ export async function GET(request) {
   try {
     const { searchParams } = new URL(request.url);
     const sellerId = searchParams.get("sellerId");
+    const cobroId = searchParams.get("cobroId");
     const stockDate = searchParams.get("stockDate"); // YYYY-MM-DD
     const action = searchParams.get("action");
 
-    if (!sellerId) return fail(new Error("sellerId requerido"), 400);
+    if (!sellerId && !cobroId) return fail(new Error("sellerId o cobroId requerido"), 400);
 
     if (action === "dates") {
       const rows = await query(
         `SELECT DISTINCT stock_date::text AS stock_date
          FROM cobrokits.daily_seller_stock
-         WHERE seller_id = $1::uuid
+         WHERE ($1::uuid IS NULL OR seller_id = $1::uuid)
+           AND ($2::uuid IS NULL OR cobro_id = $2::uuid)
          ORDER BY stock_date DESC`,
-        [sellerId]
+        [sellerId, cobroId]
       );
       return ok({ dates: rows.map(r => r.stock_date) });
     }
@@ -31,11 +33,12 @@ export async function GET(request) {
       SELECT dss.*, p.name AS product_name, p.sale_price, p.investment_cost
       FROM cobrokits.daily_seller_stock dss
       JOIN cobrokits.products p ON p.id = dss.product_id
-      WHERE dss.seller_id = $1::uuid
-        AND ($2::date IS NULL OR dss.stock_date = $2::date)
+      WHERE ($1::uuid IS NULL OR dss.seller_id = $1::uuid)
+        AND ($2::uuid IS NULL OR dss.cobro_id = $2::uuid)
+        AND ($3::date IS NULL OR dss.stock_date = $3::date)
       ORDER BY dss.stock_date DESC, p.name
       `,
-      [sellerId, stockDate || null]
+      [sellerId, cobroId, stockDate || null]
     );
 
     return ok({ items: rows });
@@ -50,28 +53,51 @@ export async function POST(request) {
     const { action } = body;
 
     if (action === "deliver") {
-      const { seller_id, product_id, quantity, stock_date, notes } = body;
+      const { seller_id, product_id, quantity, stock_date, notes, cobro_id } = body;
       if (!seller_id || !product_id || !quantity) {
         return fail(new Error("seller_id, product_id y quantity requeridos"), 400);
       }
+      if (cobro_id) {
+        const existing = await query(
+          `SELECT COUNT(*)::int AS count FROM cobrokits.daily_seller_stock
+           WHERE cobro_id = $1::uuid AND stock_date = $2::date`,
+          [cobro_id, stock_date || hoyColombia()]
+        );
+        if (existing[0]?.count > 0) {
+          return fail(new Error("Ya se ha entregado stock a este cobro para esta fecha"), 400);
+        }
+      }
       const [result] = await query(
-        `SELECT * FROM cobrokits.deliver_daily_stock($1::uuid, $2::uuid, $3::integer, $4::date, $5::text)`,
-        [seller_id, product_id, Number(quantity), stock_date || hoyColombia(), notes || null]
+        `SELECT * FROM cobrokits.deliver_daily_stock($1::uuid, $2::uuid, $3::integer, $4::date, $5::text, $6::uuid)`,
+        [seller_id, product_id, Number(quantity), stock_date || hoyColombia(), notes || null, cobro_id || null]
       );
       return ok({ result }, { status: 201 });
     }
 
     if (action === "deliver_batch") {
-      const { seller_id, stock_date, items } = body;
+      const { seller_id, stock_date, items, cobro_id } = body;
       if (!seller_id || !Array.isArray(items) || items.length === 0) {
         return fail(new Error("seller_id y items array requeridos"), 400);
       }
+
+      // Validar que no exista stock previo para este cobro y día
+      if (cobro_id) {
+        const existing = await query(
+          `SELECT COUNT(*)::int AS count FROM cobrokits.daily_seller_stock
+           WHERE cobro_id = $1::uuid AND stock_date = $2::date`,
+          [cobro_id, stock_date || hoyColombia()]
+        );
+        if (existing[0]?.count > 0) {
+          return fail(new Error("Ya se ha entregado stock a este cobro para esta fecha"), 400);
+        }
+      }
+
       const results = [];
       for (const item of items) {
         if (!item.product_id || !item.quantity) continue;
         const [result] = await query(
-          `SELECT * FROM cobrokits.deliver_daily_stock($1::uuid, $2::uuid, $3::integer, $4::date, $5::text)`,
-          [seller_id, item.product_id, Number(item.quantity), stock_date || hoyColombia(), item.notes || null]
+          `SELECT * FROM cobrokits.deliver_daily_stock($1::uuid, $2::uuid, $3::integer, $4::date, $5::text, $6::uuid)`,
+          [seller_id, item.product_id, Number(item.quantity), stock_date || hoyColombia(), item.notes || null, cobro_id || null]
         );
         results.push(result);
       }

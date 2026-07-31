@@ -11,6 +11,7 @@ export async function GET(request) {
     const { searchParams } = new URL(request.url);
     const weekStart = searchParams.get("weekStart"); // e.g. "2026-06-23"
     const sellerId = searchParams.get("sellerId") || null;
+    const cobroId = searchParams.get("cobroId") || null;
 
     if (!weekStart) return fail(new Error("weekStart requerido (YYYY-MM-DD)"), 400);
 
@@ -24,6 +25,13 @@ export async function GET(request) {
           interval '1 day'
         )::date AS day
       ),
+      -- Sellers who received stock for the selected cobro during the week
+      cobro_sellers AS (
+        SELECT DISTINCT seller_id
+        FROM cobrokits.daily_seller_stock
+        WHERE stock_date BETWEEN $1::date AND ($1::date + interval '6 days')
+          AND ($3::uuid IS NULL OR cobro_id = $3::uuid)
+      ),
       -- Payments per day (from canonical payments table) — local Colombia time.
       daily_payments AS (
         SELECT
@@ -34,7 +42,8 @@ export async function GET(request) {
           COUNT(DISTINCT p.customer_id)                       AS clientes_abonaron
         FROM cobrokits.payments p
         WHERE (p.paid_at AT TIME ZONE 'America/Bogota')::date BETWEEN $1::date AND ($1::date + interval '6 days')
-          AND ($2::uuid IS NULL OR p.seller_id = $2::uuid)
+          AND ($3::uuid IS NOT NULL OR $2::uuid IS NULL OR p.seller_id = $2::uuid)
+          AND ($3::uuid IS NULL OR p.seller_id IN (SELECT seller_id FROM cobro_sellers))
         GROUP BY (p.paid_at AT TIME ZONE 'America/Bogota')::date
       ),
       -- Total visits per day.
@@ -44,7 +53,8 @@ export async function GET(request) {
           COUNT(cv.id) AS visitas_totales
         FROM cobrokits.customer_visits cv
         WHERE (cv.visit_date AT TIME ZONE 'America/Bogota')::date BETWEEN $1::date AND ($1::date + interval '6 days')
-          AND ($2::uuid IS NULL OR cv.seller_id = $2::uuid)
+          AND ($3::uuid IS NOT NULL OR $2::uuid IS NULL OR cv.seller_id = $2::uuid)
+          AND ($3::uuid IS NULL OR cv.seller_id IN (SELECT seller_id FROM cobro_sellers))
         GROUP BY (cv.visit_date AT TIME ZONE 'America/Bogota')::date
       ),
       -- Products left with customers per day.
@@ -57,7 +67,8 @@ export async function GET(request) {
         FROM cobrokits.customer_visits cv
         JOIN cobrokits.customer_visit_items cvi ON cvi.visit_id = cv.id
         WHERE (cv.visit_date AT TIME ZONE 'America/Bogota')::date BETWEEN $1::date AND ($1::date + interval '6 days')
-          AND ($2::uuid IS NULL OR cv.seller_id = $2::uuid)
+          AND ($3::uuid IS NOT NULL OR $2::uuid IS NULL OR cv.seller_id = $2::uuid)
+          AND ($3::uuid IS NULL OR cv.seller_id IN (SELECT seller_id FROM cobro_sellers))
         GROUP BY (cv.visit_date AT TIME ZONE 'America/Bogota')::date
       ),
       -- Customers whose balance reached 0 that day (cancelada).
@@ -67,12 +78,13 @@ export async function GET(request) {
           COUNT(DISTINCT cv.customer_id) AS canceladas
         FROM cobrokits.customer_visits cv
         WHERE (cv.visit_date AT TIME ZONE 'America/Bogota')::date BETWEEN $1::date AND ($1::date + interval '6 days')
-          AND ($2::uuid IS NULL OR cv.seller_id = $2::uuid)
+          AND ($3::uuid IS NOT NULL OR $2::uuid IS NULL OR cv.seller_id = $2::uuid)
+          AND ($3::uuid IS NULL OR cv.seller_id IN (SELECT seller_id FROM cobro_sellers))
           AND cv.new_balance = 0
           AND cv.payment_amount > 0
         GROUP BY (cv.visit_date AT TIME ZONE 'America/Bogota')::date
       ),
-      -- Manual entries per day (from weekly_manual_entries)
+      -- Manual entries per day (from weekly_manual_entries, scoped by cobro/seller)
       daily_manual AS (
         SELECT
           entry_date AS day,
@@ -82,13 +94,19 @@ export async function GET(request) {
           saldo_anterior AS manual_saldo_anterior
         FROM cobrokits.weekly_manual_entries
         WHERE entry_date BETWEEN $1::date AND ($1::date + interval '6 days')
+          AND (
+            ($3::uuid IS NOT NULL AND cobro_id = $3::uuid)
+            OR ($3::uuid IS NULL AND $2::uuid IS NOT NULL AND seller_id = $2::uuid)
+            OR ($3::uuid IS NULL AND $2::uuid IS NULL AND cobro_id IS NULL AND seller_id IS NULL)
+          )
       ),
       -- Active customer count (for % effectiveness)
       active_customers AS (
         SELECT COUNT(*)::numeric AS total
         FROM cobrokits.customers
         WHERE is_active = true
-          AND ($2::uuid IS NULL OR seller_id = $2::uuid)
+          AND ($3::uuid IS NOT NULL OR $2::uuid IS NULL OR seller_id = $2::uuid)
+          AND ($3::uuid IS NULL OR cobro_id = $3::uuid)
       ),
       -- Collection target per day: sum of balances for customers whose visit_day matches the day of week
       daily_target AS (
@@ -98,7 +116,8 @@ export async function GET(request) {
           COALESCE(SUM(c.current_balance), 0) AS target_amount
         FROM week_days wd
         JOIN cobrokits.customers c ON c.is_active = true AND c.visit_day = EXTRACT(DOW FROM wd.day)::int
-        WHERE ($2::uuid IS NULL OR c.seller_id = $2::uuid)
+        WHERE ($3::uuid IS NOT NULL OR $2::uuid IS NULL OR c.seller_id = $2::uuid)
+          AND ($3::uuid IS NULL OR c.cobro_id = $3::uuid)
         GROUP BY wd.day, EXTRACT(DOW FROM wd.day)
       ),
       -- Unique customers who bought or paid today
@@ -108,7 +127,8 @@ export async function GET(request) {
           COUNT(DISTINCT cv.customer_id) AS clientes_activos
         FROM cobrokits.customer_visits cv
         WHERE (cv.visit_date AT TIME ZONE 'America/Bogota')::date BETWEEN $1::date AND ($1::date + interval '6 days')
-          AND ($2::uuid IS NULL OR cv.seller_id = $2::uuid)
+          AND ($3::uuid IS NOT NULL OR $2::uuid IS NULL OR cv.seller_id = $2::uuid)
+          AND ($3::uuid IS NULL OR cv.seller_id IN (SELECT seller_id FROM cobro_sellers))
           AND (cv.payment_amount > 0 OR cv.new_products_total > 0)
         GROUP BY (cv.visit_date AT TIME ZONE 'America/Bogota')::date
       ),
@@ -119,7 +139,8 @@ export async function GET(request) {
           COALESCE(SUM(cv.new_balance), 0) AS saldo_anterior
         FROM cobrokits.customer_visits cv
         WHERE (cv.visit_date AT TIME ZONE 'America/Bogota')::date BETWEEN ($1::date - interval '7 days')::date AND ($1::date - interval '1 day')::date
-          AND ($2::uuid IS NULL OR cv.seller_id = $2::uuid)
+          AND ($3::uuid IS NOT NULL OR $2::uuid IS NULL OR cv.seller_id = $2::uuid)
+          AND ($3::uuid IS NULL OR cv.seller_id IN (SELECT seller_id FROM cobro_sellers))
         GROUP BY (cv.visit_date AT TIME ZONE 'America/Bogota')::date
       ),
       -- Daily sale value from daily_seller_stock (sold * sale_price)
@@ -130,7 +151,8 @@ export async function GET(request) {
         FROM cobrokits.daily_seller_stock dss
         JOIN cobrokits.products p ON p.id = dss.product_id
         WHERE dss.stock_date BETWEEN $1::date AND ($1::date + interval '6 days')
-          AND ($2::uuid IS NULL OR dss.seller_id = $2::uuid)
+          AND ($3::uuid IS NOT NULL OR $2::uuid IS NULL OR dss.seller_id = $2::uuid)
+          AND ($3::uuid IS NULL OR dss.seller_id IN (SELECT seller_id FROM cobro_sellers))
           AND dss.quantity_sold > 0
         GROUP BY dss.stock_date
       )
@@ -172,7 +194,7 @@ export async function GET(request) {
       LEFT JOIN daily_saldo_anterior  dsa ON dsa.day = wd.day
       ORDER BY wd.day
       `,
-      [weekStart, sellerId]
+      [weekStart, sellerId, cobroId]
     );
 
     // Also get cartera total (current snapshot)
@@ -181,9 +203,10 @@ export async function GET(request) {
         SELECT COALESCE(SUM(current_balance), 0) AS total
         FROM cobrokits.customers
         WHERE is_active = true
-          AND ($1::uuid IS NULL OR seller_id = $1::uuid)
+          AND ($2::uuid IS NOT NULL OR $1::uuid IS NULL OR seller_id = $1::uuid)
+          AND ($2::uuid IS NULL OR cobro_id = $2::uuid)
       `,
-      [sellerId]
+      [sellerId, cobroId]
     );
 
     return ok({ days, cartera_actual: cartera.total });
@@ -200,24 +223,43 @@ export async function GET(request) {
 export async function PUT(request) {
   try {
     const body = await request.json();
-    const { date, gasto = 0, cnt_notes = "", entregado, saldo_anterior } = body;
+    const { date, cobro_id, seller_id } = body;
 
     if (!date) return fail(new Error("date requerido"), 400);
 
+    // Partial update: only persist fields the user actually edited.
+    const sets = [];
+    const params = [cobro_id || null, seller_id || null, date];
+    const colFor = {
+      gasto: "gasto",
+      cnt_notes: "cnt_notes",
+      entregado: "entregado",
+      saldo_anterior: "saldo_anterior",
+    };
+    for (const [key, col] of Object.entries(colFor)) {
+      if (body[key] !== undefined && body[key] !== null) {
+        params.push(body[key]);
+        sets.push(col);
+      }
+    }
+    if (sets.length === 0) return fail(new Error("Sin campos para actualizar"), 400);
+
+    const conflictTarget = (!cobro_id && !seller_id)
+      ? "ON CONFLICT (entry_date) WHERE cobro_id IS NULL AND seller_id IS NULL"
+      : "ON CONFLICT (entry_date, cobro_id, seller_id) WHERE cobro_id IS NOT NULL OR seller_id IS NOT NULL";
+
+    const fieldsSql = sets.map((_, i) => `$${i + 4}`).join(", ");
     const [entry] = await query(
       `
-      INSERT INTO cobrokits.weekly_manual_entries (entry_date, gasto, cnt_notes, entregado, saldo_anterior)
-      VALUES ($1::date, $2, $3, $4, $5)
-      ON CONFLICT (entry_date)
+      INSERT INTO cobrokits.weekly_manual_entries (cobro_id, seller_id, entry_date, ${sets.join(", ")})
+      VALUES ($1::uuid, $2::uuid, $3::date, ${fieldsSql})
+      ${conflictTarget}
       DO UPDATE SET
-        gasto           = EXCLUDED.gasto,
-        cnt_notes       = EXCLUDED.cnt_notes,
-        entregado       = EXCLUDED.entregado,
-        saldo_anterior  = EXCLUDED.saldo_anterior,
-        updated_at      = now()
-      RETURNING entry_date::text AS day, gasto, cnt_notes, entregado, saldo_anterior
+        ${sets.map(c => `${c} = EXCLUDED.${c}`).join(",\n        ")},
+        updated_at = now()
+      RETURNING entry_date::text AS day, cobro_id, seller_id, gasto, cnt_notes, entregado, saldo_anterior
       `,
-      [date, gasto, cnt_notes, entregado ?? null, saldo_anterior ?? null]
+      params
     );
 
     return ok({ entry });

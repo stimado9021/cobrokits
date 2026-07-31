@@ -75,7 +75,7 @@ function ProductRow({ product, onAdded }) {
               opacity: 0.6,
             }}
           />
-          {product.name}
+          {product.name.toUpperCase()}
         </td>
         <td title={`Stock: ${product.quantity} unidades`}>
           <strong
@@ -278,7 +278,7 @@ export function Inventario() {
             ${stock.map((p, i) => `
               <tr style="background: ${i % 2 === 0 ? "#f9f9f9" : "#fff"};">
                 <td style="padding: 8px 12px; font-size: 12px; color: #666;">${i + 1}</td>
-                <td style="padding: 8px 12px; font-size: 13px; font-weight: 500;">${p.name}</td>
+                <td style="padding: 8px 12px; font-size: 13px; font-weight: 500;">${p.name.toUpperCase()}</td>
                 <td style="padding: 8px 12px; text-align: center; font-size: 14px; font-weight: bold; color: ${Number(p.quantity) > 0 ? "#16a34a" : "#dc2626"};">${p.quantity}</td>
               </tr>
             `).join("")}
@@ -343,7 +343,7 @@ export function Inventario() {
       stock.forEach((p, i) => {
         const bg = i % 2 === 0 ? "#f9f9f9" : "#fff";
         const cls = Number(p.quantity) > 0 ? "stock-ok" : "stock-zero";
-        html += `<tr style="background:${bg};"><td class="label">${i + 1}</td><td class="label">${p.name}</td><td class="${cls}">${p.quantity}</td></tr>`;
+        html += `<tr style="background:${bg};"><td class="label">${i + 1}</td><td class="label">${p.name.toUpperCase()}</td><td class="${cls}">${p.quantity}</td></tr>`;
       });
 
       html += `</tbody><tfoot><tr style="background:#f3f0ff; border-top:2px solid #7c3aed;"><td class="total" colspan="2" style="text-align:left;">Total unidades</td><td class="total">${totalUnits}</td></tr></tfoot></table>
@@ -472,7 +472,7 @@ export function Inventario() {
             onChange={(e) => {
               const id = e.target.value || null;
               const name =
-                stock.find((s) => s.id === id)?.name || "todos los productos";
+                stock.find((s) => s.id === id)?.name?.toUpperCase() || "TODOS LOS PRODUCTOS";
               selectProduct(id, name);
             }}
             style={{ width: "100%" }}
@@ -480,7 +480,7 @@ export function Inventario() {
             <option value="">Todos los productos</option>
             {stock.map((s) => (
               <option key={s.id} value={s.id}>
-                {s.name}
+                {s.name.toUpperCase()}
               </option>
             ))}
           </select>
