@@ -9,7 +9,7 @@ const fmt = new Intl.NumberFormat("es-CO", {
 
 function money(val) {
   const v = Number(val || 0);
-  if (v === 0) return "–";
+  if (v === 0) return "0";
   return fmt.format(v);
 }
 
@@ -75,8 +75,8 @@ export function ImprimirCobros({ sellers, activeSellerId, activeSellerName, acti
           <td style="padding:6px 8px;text-align:center;border-bottom:1px solid #e5e7eb;">${i + 1}</td>
           <td style="padding:6px 8px;text-align:left;font-weight:600;border-bottom:1px solid #e5e7eb;">${c.name.toUpperCase()}</td>
           <td style="padding:6px 8px;text-align:center;border-bottom:1px solid #e5e7eb;">$${Number(c.current_balance).toLocaleString("es-CO")}</td>
-          <td style="padding:6px 8px;text-align:center;border-bottom:1px solid #e5e7eb;">${c.last_visit_date ? "$" + Number(c.last_payment).toLocaleString("es-CO") : "–"}</td>
-          <td style="padding:6px 8px;text-align:left;border-bottom:1px solid #e5e7eb;">${c.last_products_summary || "–"}</td>
+          <td style="padding:6px 8px;text-align:center;border-bottom:1px solid #e5e7eb;">${c.last_visit_date ? "$" + Number(c.last_payment).toLocaleString("es-CO") : "0"}</td>
+          <td style="padding:6px 8px;text-align:left;border-bottom:1px solid #e5e7eb;">${c.last_products_summary || "0"}</td>
         </tr>`;
       });
 
@@ -129,8 +129,8 @@ export function ImprimirCobros({ sellers, activeSellerId, activeSellerName, acti
           <td style="text-align:center;">${i + 1}</td>
           <td>${c.name.toUpperCase()}</td>
           <td style="text-align:right;">${Number(c.current_balance).toLocaleString("es-CO")}</td>
-          <td style="text-align:right;">${c.last_visit_date ? Number(c.last_payment).toLocaleString("es-CO") : "–"}</td>
-          <td>${c.last_products_summary || "–"}</td>
+          <td style="text-align:right;">${c.last_visit_date ? Number(c.last_payment).toLocaleString("es-CO") : "0"}</td>
+          <td>${c.last_products_summary || "0"}</td>
         </tr>`;
       });
 
@@ -234,9 +234,9 @@ export function ImprimirCobros({ sellers, activeSellerId, activeSellerName, acti
                   <td style={{ fontWeight: 600 }}>{c.name.toUpperCase()}</td>
                   <td>{money(c.current_balance)}</td>
                   <td>
-                    {c.last_visit_date ? money(c.last_payment) : "–"}
+                    {c.last_visit_date ? money(c.last_payment) : "0"}
                   </td>
-                  <td>{c.last_products_summary || "–"}</td>
+                  <td>{c.last_products_summary || "0"}</td>
                 </tr>
               ))}
             </tbody>

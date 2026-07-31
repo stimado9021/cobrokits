@@ -51,13 +51,13 @@ const fmt = new Intl.NumberFormat("es-CO", {
 
 function money(val) {
   const v = n(val);
-  if (v === 0) return "–";
+  if (v === 0) return "0";
   return fmt.format(v);
 }
 
 function moneyColored(val, zeroClass = "empty") {
   const v = n(val);
-  if (v === 0) return <span className={zeroClass}>–</span>;
+  if (v === 0) return <span className={zeroClass}>0</span>;
   return <span className={v > 0 ? "positive" : "negative"}>{fmt.format(v)}</span>;
 }
 
@@ -65,9 +65,9 @@ function cellTitle(col, rawVal) {
   const label = col.label;
   const v = n(rawVal);
   let valStr;
-  if (col.type === "percent") valStr = v ? `${v}%` : "–";
-  else if (col.type === "number") valStr = v || "–";
-  else valStr = v ? fmt.format(v) : "–";
+  if (col.type === "percent") valStr = v ? `${v}%` : "0";
+  else if (col.type === "number") valStr = v || "0";
+  else valStr = v ? fmt.format(v) : "0";
   return `${label}: ${valStr}\n${col.desc}`;
 }
 
@@ -265,9 +265,9 @@ export function ReportesSemanales({ activeSellerId = "", activeSellerName = "Tod
       if (key === "cnt_notes") {
         valDisplay = rawVal || <span className="wr-placeholder">…</span>;
       } else {
-        valDisplay = v !== 0 ? money(rawVal) : <span className="wr-placeholder">–</span>;
+        valDisplay = v !== 0 ? money(rawVal) : <span className="wr-placeholder">0</span>;
       }
-      const valStr = key === "cnt_notes" ? (rawVal || "…") : (v ? fmt.format(v) : "–");
+      const valStr = key === "cnt_notes" ? (rawVal || "…") : (v ? fmt.format(v) : "0");
       const titleText = `${row.label}: ${valStr}\n${row.desc}\nClic para editar`;
       return (
         <span
@@ -282,8 +282,8 @@ export function ReportesSemanales({ activeSellerId = "", activeSellerName = "Tod
 
     // Read-only calculated cells
     const t = cellTitle(row, rawVal);
-    if (row.type === "number") return <span title={t}>{n(rawVal) || "–"}</span>;
-    if (row.type === "percent") return <span title={t}>{n(rawVal) ? `${n(rawVal)}%` : "–"}</span>;
+    if (row.type === "number") return <span title={t}>{n(rawVal) || "0"}</span>;
+    if (row.type === "percent") return <span title={t}>{n(rawVal) ? `${n(rawVal)}%` : "0"}</span>;
     if (row.type === "money_signed") return moneyColored(rawVal);
     if (row.key === "ganancia") {
       const v = n(rawVal);
@@ -298,13 +298,13 @@ export function ReportesSemanales({ activeSellerId = "", activeSellerName = "Tod
     // Saldo anterior no es aditivo: el Total muestra el saldo con el que arrancó la semana (lunes).
     if (row.key === "saldo_anterior") {
       const opening = days[0]?.[row.key];
-      const t = `Total Saldo Ant.: ${n(opening) ? fmt.format(opening) : "–"}\n${row.desc}`;
+      const t = `Total Saldo Ant.: ${n(opening) ? fmt.format(opening) : "0"}\n${row.desc}`;
       return <span className={n(opening) > 0 ? "positive" : "empty"} title={t}>{money(opening)}</span>;
     }
-    const t = `Total ${row.label}: ${n(val) ? fmt.format(val) : "–"}\n${row.desc}`;
-    if (row.type === "text") return "–";
-    if (row.type === "number") return <span title={t}>{n(val) || "–"}</span>;
-    if (row.type === "percent") return <span title={t}>{n(val) ? `${Math.round(n(val) / 7)}%` : "–"}</span>;
+    const t = `Total ${row.label}: ${n(val) ? fmt.format(val) : "0"}\n${row.desc}`;
+    if (row.type === "text") return "0";
+    if (row.type === "number") return <span title={t}>{n(val) || "0"}</span>;
+    if (row.type === "percent") return <span title={t}>{n(val) ? `${Math.round(n(val) / 7)}%` : "0"}</span>;
     if (row.key === "ganancia") {
       const v = n(val);
       return <strong className={v > 0 ? "gain-positive" : "gain-negative"} title={t}>{money(val)}</strong>;
@@ -323,7 +323,7 @@ export function ReportesSemanales({ activeSellerId = "", activeSellerName = "Tod
 
   function formatMoneyPdf(val) {
     const v = n(val);
-    if (v === 0) return "–";
+    if (v === 0) return "0";
     return "$" + v.toLocaleString("es-CO");
   }
 
@@ -375,8 +375,8 @@ export function ReportesSemanales({ activeSellerId = "", activeSellerName = "Tod
           const val = dayData?.[col.key];
           let display = "";
           if (col.type === "label") display = dayLabel;
-          else if (col.type === "percent") display = n(val) ? `${n(val)}%` : "–";
-          else if (col.type === "number") display = n(val) || "–";
+          else if (col.type === "percent") display = n(val) ? `${n(val)}%` : "0";
+          else if (col.type === "number") display = n(val) || "0";
           else display = formatMoneyPdf(val);
 
           const isGain = col.key === "ganancia";
@@ -395,10 +395,10 @@ export function ReportesSemanales({ activeSellerId = "", activeSellerName = "Tod
         let display = "";
         if (col.type === "label") display = "TOTAL";
         else if (col.type === "percent") {
-          const avg = n(totals[col.key]) ? `${Math.round(n(totals[col.key]) / 7)}%` : "–";
+          const avg = n(totals[col.key]) ? `${Math.round(n(totals[col.key]) / 7)}%` : "0";
           display = avg;
         }
-        else if (col.type === "number") display = n(totals[col.key]) || "–";
+        else if (col.type === "number") display = n(totals[col.key]) || "0";
         else display = formatMoneyPdf(totals[col.key]);
 
         const align = col.type === "label" ? "left" : "center";
@@ -487,11 +487,11 @@ export function ReportesSemanales({ activeSellerId = "", activeSellerName = "Tod
           const val = dayData?.[col.key];
           let display = ""; let cls = "";
           if (col.type === "label") { display = dayLabel; cls = "label"; }
-          else if (col.type === "percent") display = n(val) ? `${n(val)}%` : "–";
-          else if (col.type === "number") display = n(val) || "–";
+          else if (col.type === "percent") display = n(val) ? `${n(val)}%` : "0";
+          else if (col.type === "number") display = n(val) || "0";
           else {
             const v = n(val);
-            display = v ? `$${Number(v).toLocaleString("es-CO")}` : "–";
+            display = v ? `$${Number(v).toLocaleString("es-CO")}` : "0";
             if (col.key === "ganancia") cls = v > 0 ? "gain-positive" : "gain-negative";
           }
           html += `<td class="${cls}">${display}</td>`;
@@ -504,13 +504,13 @@ export function ReportesSemanales({ activeSellerId = "", activeSellerName = "Tod
         let display = ""; let cls = "total";
         if (col.type === "label") display = "TOTAL";
         else if (col.type === "percent") {
-          const avg = n(totals[col.key]) ? `${Math.round(n(totals[col.key]) / 7)}%` : "–";
+          const avg = n(totals[col.key]) ? `${Math.round(n(totals[col.key]) / 7)}%` : "0";
           display = avg;
         }
-        else if (col.type === "number") display = n(totals[col.key]) || "–";
+        else if (col.type === "number") display = n(totals[col.key]) || "0";
         else {
           const val = col.key === "saldo_anterior" ? n(days[0]?.[col.key]) : n(totals[col.key]);
-          display = val ? `$${Number(val).toLocaleString("es-CO")}` : "–";
+          display = val ? `$${Number(val).toLocaleString("es-CO")}` : "0";
         }
         html += `<td class="${cls}">${display}</td>`;
       });

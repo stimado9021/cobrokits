@@ -39,7 +39,7 @@ const fmt = new Intl.NumberFormat("es-CO", {
 
 function money(val) {
   const v = n(val);
-  if (v === 0) return "–";
+  if (v === 0) return "0";
   return fmt.format(v);
 }
 
@@ -70,9 +70,9 @@ function cellTitle(col, rawVal) {
   const label = col.label;
   const v = n(rawVal);
   let valStr;
-  if (col.type === "percent") valStr = v ? `${v}%` : "–";
-  else if (col.type === "number") valStr = v || "–";
-  else valStr = v ? fmt.format(v) : "–";
+  if (col.type === "percent") valStr = v ? `${v}%` : "0";
+  else if (col.type === "number") valStr = v || "0";
+  else valStr = v ? fmt.format(v) : "0";
   return `${label}: ${valStr}\n${col.desc}`;
 }
 
@@ -250,8 +250,8 @@ export function ReporteDiario({ activeSellerId = "", activeSellerName = "Todos l
 
     if (col.editable) {
       const v = n(rawVal);
-      const valDisplay = v !== 0 ? money(rawVal) : <span className="wr-placeholder">–</span>;
-      const titleText = `${col.label}: ${v ? fmt.format(v) : "–"}\n${col.desc}\nClic para editar`;
+      const valDisplay = v !== 0 ? money(rawVal) : <span className="wr-placeholder">0</span>;
+      const titleText = `${col.label}: ${v ? fmt.format(v) : "0"}\n${col.desc}\nClic para editar`;
       return (
         <span
           className="wr-editable-val"
@@ -265,8 +265,8 @@ export function ReporteDiario({ activeSellerId = "", activeSellerName = "Todos l
 
     const val = n(rawVal ?? 0);
     const t = cellTitle(col, rawVal);
-    if (col.type === "number") return <span title={t}>{val || "–"}</span>;
-    if (col.type === "percent") return <span title={t}>{val ? `${val}%` : "–"}</span>;
+    if (col.type === "number") return <span title={t}>{val || "0"}</span>;
+    if (col.type === "percent") return <span title={t}>{val ? `${val}%` : "0"}</span>;
      if (col.key === "ganancia") {
        return <strong className={val > 0 ? "gain-positive" : "gain-negative"} title={t}>{money(val)}</strong>;
      }
@@ -278,9 +278,9 @@ export function ReporteDiario({ activeSellerId = "", activeSellerName = "Todos l
 
   function renderTotalCell(col) {
     const val = n(totals[col.key]);
-    const t = `Total ${col.label}: ${val ? fmt.format(val) : "–"}\n${col.desc}`;
-    if (col.type === "number") return <span title={t}>{val || "–"}</span>;
-    if (col.type === "percent") return <span title={t}>{val ? `${Math.round(val / Math.max(sellers.length, 1))}%` : "–"}</span>;
+    const t = `Total ${col.label}: ${val ? fmt.format(val) : "0"}\n${col.desc}`;
+    if (col.type === "number") return <span title={t}>{val || "0"}</span>;
+    if (col.type === "percent") return <span title={t}>{val ? `${Math.round(val / Math.max(sellers.length, 1))}%` : "0"}</span>;
     if (col.key === "ganancia") {
       return <strong className={val > 0 ? "gain-positive" : "gain-negative"} title={t}>{money(val)}</strong>;
     }
@@ -328,9 +328,9 @@ export function ReporteDiario({ activeSellerId = "", activeSellerName = "Todos l
           const val = row?.[col.key];
           let display = "";
           if (col.type === "label") display = val || "";
-          else if (col.type === "percent") display = n(val) ? `${n(val)}%` : "–";
-          else if (col.type === "number") display = n(val) || "–";
-          else display = n(val) ? `$${Number(val).toLocaleString("es-CO")}` : "–";
+          else if (col.type === "percent") display = n(val) ? `${n(val)}%` : "0";
+          else if (col.type === "number") display = n(val) || "0";
+          else display = n(val) ? `$${Number(val).toLocaleString("es-CO")}` : "0";
 
           const isGain = col.key === "ganancia";
           const isComputed = ["entrega", "d_merca", "d_dinero"].includes(col.key);
@@ -349,10 +349,10 @@ export function ReporteDiario({ activeSellerId = "", activeSellerName = "Todos l
         if (col.type === "label") display = "TOTAL";
         else if (col.type === "percent") {
           const totalPct = Math.round(n(totals[col.key]) / Math.max(sellers.length, 1));
-          display = totalPct ? `${totalPct}%` : "–";
+          display = totalPct ? `${totalPct}%` : "0";
         }
-        else if (col.type === "number") display = n(totals[col.key]) || "–";
-        else display = n(totals[col.key]) ? `$${Number(totals[col.key]).toLocaleString("es-CO")}` : "–";
+        else if (col.type === "number") display = n(totals[col.key]) || "0";
+        else display = n(totals[col.key]) ? `$${Number(totals[col.key]).toLocaleString("es-CO")}` : "0";
 
         const align = col.type === "label" ? "left" : "center";
         tableRows += `<td style="padding:6px 8px; text-align:${align}; font-size:10px; border-bottom:1px solid #6d28d9;">${display}</td>`;
@@ -432,11 +432,11 @@ export function ReporteDiario({ activeSellerId = "", activeSellerName = "Todos l
           const val = row?.[col.key];
           let display = ""; let cls = "";
           if (col.type === "label") { display = val || ""; cls = "label"; }
-          else if (col.type === "percent") display = n(val) ? `${n(val)}%` : "–";
-          else if (col.type === "number") display = n(val) || "–";
+          else if (col.type === "percent") display = n(val) ? `${n(val)}%` : "0";
+          else if (col.type === "number") display = n(val) || "0";
           else {
             const v = n(val);
-            display = v ? `$${Number(v).toLocaleString("es-CO")}` : "–";
+            display = v ? `$${Number(v).toLocaleString("es-CO")}` : "0";
             if (col.key === "ganancia") cls = v > 0 ? "gain-positive" : "gain-negative";
           }
           html += `<td class="${cls}">${display}</td>`;
@@ -450,10 +450,10 @@ export function ReporteDiario({ activeSellerId = "", activeSellerName = "Todos l
         if (col.type === "label") display = "TOTAL";
         else if (col.type === "percent") {
           const totalPct = Math.round(n(totals[col.key]) / Math.max(sellers.length, 1));
-          display = totalPct ? `${totalPct}%` : "–";
+          display = totalPct ? `${totalPct}%` : "0";
         }
-        else if (col.type === "number") display = n(totals[col.key]) || "–";
-        else display = n(totals[col.key]) ? `$${Number(totals[col.key]).toLocaleString("es-CO")}` : "–";
+        else if (col.type === "number") display = n(totals[col.key]) || "0";
+        else display = n(totals[col.key]) ? `$${Number(totals[col.key]).toLocaleString("es-CO")}` : "0";
         html += `<td class="${cls}">${display}</td>`;
       });
       html += "</tr>";

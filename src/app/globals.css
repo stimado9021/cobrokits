@@ -346,7 +346,7 @@ button {
   border-radius: var(--r-lg);
   background: var(--surface);
   border: 1px solid var(--line);
-  box-shadow: var(--shadow-sm);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.10), 0 2px 8px rgba(0,0,0,0.06);
   transition: transform 0.2s, border-color 0.2s, box-shadow 0.2s;
   position: relative;
   overflow: hidden;
@@ -365,7 +365,7 @@ button {
 .metrics article:hover {
   transform: translateY(-2px);
   border-color: rgba(59,130,246,0.3);
-  box-shadow: var(--shadow-lg), 0 0 0 1px rgba(59,130,246,0.1);
+  box-shadow: 0 14px 34px rgba(37,99,235,0.22), 0 4px 12px rgba(0,0,0,0.10), 0 0 0 1px rgba(59,130,246,0.1);
 }
 
 .metrics article:hover::before {
@@ -398,13 +398,13 @@ button {
   border-radius: var(--r-lg);
   background: var(--surface);
   border: 1px solid var(--line);
-  box-shadow: var(--shadow-sm);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.10), 0 2px 8px rgba(0,0,0,0.06);
   padding: 20px;
   transition: box-shadow 0.2s, border-color 0.2s;
 }
 
 .panel:hover {
-  box-shadow: var(--shadow-lg);
+  box-shadow: 0 14px 34px rgba(37,99,235,0.18), 0 4px 12px rgba(0,0,0,0.08);
   border-color: var(--line-strong);
 }
 
@@ -1600,11 +1600,12 @@ select:disabled {
 .login-screen {
   display: flex;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   min-height: 100vh;
   min-height: 100dvh;
-  padding: 20px;
-  background: radial-gradient(ellipse at 50% 0%, rgba(59,130,246,0.06), transparent 70%), var(--bg);
+  padding: 24px 28px;
+  background:
+    url('/68c09f69f70329cd6bdb9998_controlar-ventas.webp') center / cover no-repeat;
 }
 
 .login-box {
@@ -1613,6 +1614,11 @@ select:disabled {
   display: flex;
   flex-direction: column;
   gap: 16px;
+  padding: 28px 26px;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  box-shadow: 0 8px 24px rgba(0,0,0,0.10), 0 2px 8px rgba(0,0,0,0.06);
   animation: loginIn 0.35s ease-out;
 }
 
@@ -1846,6 +1852,45 @@ select:disabled {
 .seller-abonos {
   color: #FCD34D !important;
   font-weight: 600;
+}
+
+.seller-header-stats {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.seller-cobro-select {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.seller-cobro-select select {
+  background: rgba(255,255,255,0.15);
+  border: 1px solid rgba(255,255,255,0.25);
+  color: #FFFFFF;
+  font-weight: 700;
+  font-size: 0.95rem;
+  border-radius: var(--r-sm);
+  padding: 3px 6px;
+  max-width: 220px;
+}
+
+.seller-cobro-select select option {
+  color: #111827;
+}
+
+.seller-stat {
+  background: rgba(255,255,255,0.12);
+  border: 1px solid rgba(255,255,255,0.18);
+  border-radius: 20px;
+  padding: 3px 10px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: rgba(255,255,255,0.92);
 }
 
 .seller-logout {

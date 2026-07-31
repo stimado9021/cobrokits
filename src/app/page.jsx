@@ -106,6 +106,9 @@ export default function Home() {
   const [activeSellerId, setActiveSellerId] = useState("");
   const [activeCobroId, setActiveCobroId] = useState("");
   const [sellerCobros, setSellerCobros] = useState([]);
+  const [sellerCobroId, setSellerCobroId] = useState(() => {
+    try { return localStorage.getItem("sellerCobroId") || ""; } catch { return ""; }
+  });
   const [notice, setNotice] = useState("");
   const [loading, setLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
@@ -260,6 +263,11 @@ export default function Home() {
     return () => { cancelled = true; clearInterval(interval); };
   }, [session]);
 
+  useEffect(() => {
+    setSellerCobroId(prev => (sellerCobros.includes(prev) ? prev : sellerCobros[0] || ""));
+    try { localStorage.setItem("sellerCobroId", sellerCobroId); } catch {}
+  }, [sellerCobros, sellerCobroId]);
+
   async function createSeller(event) {
     event.preventDefault();
     if (isSubmitting) return;
@@ -403,8 +411,7 @@ export default function Home() {
       const result = await api("/apis/customers", {
         method: "POST",
         body: JSON.stringify({
-          seller_id: session.sellerId,
-          cobro_id: sellerCobros[0] || null,
+          cobro_id: sellerCobroId || null,
           ...data,
         }),
       }, { queueOffline: true });
@@ -466,22 +473,24 @@ export default function Home() {
    // ====== SELLER VIEW (MOBILE) ======
    if (session.role === "seller") {
       const todayDow = hoyColombiaDow();
-      const sellerCustomers = customers.filter(c => c.cobro_id && sellerCobros.includes(c.cobro_id) && c.visit_day === todayDow);
+      const sellerCustomers = customers.filter(c => c.cobro_id && c.cobro_id === sellerCobroId && c.visit_day === todayDow);
       const hoy = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Bogota" }).format(new Date());
       const abonosHoy = visits
         .filter(v => v.seller_id === session.sellerId && v.visit_date?.startsWith(hoy))
         .reduce((s, v) => s + Number(v.payment_amount || 0), 0);
+      const sellerCobroName = cobros.find(c => c.id === sellerCobroId)?.name?.toUpperCase() || "Sin cobro asignado";
       const handleSync = async () => { try { await syncPending(); } catch {} };
 
        if (loading) {
          return (
            <div className="seller-viewport">
            <div className="seller-shell">
-             <header className="seller-header">
-               <div>
-                 <strong style={{ textTransform: "uppercase" }}>{session.sellerName}</strong>
-                 <span>Cargando...</span>
-               </div>
+              <header className="seller-header">
+                <div>
+                  <strong>Cobro: {sellerCobroName}</strong>
+                  <span>Vendedor: {session.sellerName}</span>
+                  <span className="seller-abonos">Cargando...</span>
+                </div>
                <div className="seller-header-actions">
                  {isOffline && <span className="seller-offline-badge"><CloudOff size={16} /></span>}
                  <button className="seller-logout" onClick={doLogout}><LogOut size={20} /></button>
@@ -547,9 +556,23 @@ export default function Home() {
       <div className="seller-shell">
         <header className="seller-header">
           <div>
-            <strong style={{ textTransform: "uppercase" }}>{session.sellerName}</strong>
-            <span>{sellerCustomers.length} clientes</span>
-            <span className="seller-abonos">Abonos: {formatMoney(abonosHoy)}</span>
+            <div className="seller-cobro-select">
+              <span>Cobro:</span>
+              {sellerCobros.length > 0 ? (
+                <select value={sellerCobroId} onChange={e => setSellerCobroId(e.target.value)}>
+                  {cobros.filter(c => sellerCobros.includes(c.id)).map(c => (
+                    <option key={c.id} value={c.id}>{c.name.toUpperCase()}</option>
+                  ))}
+                </select>
+              ) : (
+                <strong>Sin cobro asignado</strong>
+              )}
+            </div>
+            <span>Vendedor: {session.sellerName}</span>
+            <div className="seller-header-stats">
+              <span className="seller-stat seller-abonos">Abonos: {formatMoney(abonosHoy)}</span>
+              <span className="seller-stat">{sellerCustomers.length} clientes</span>
+            </div>
           </div>
           <div className="seller-header-actions">
             {pendingOps > 0 && (
@@ -593,7 +616,7 @@ export default function Home() {
           {sellerTab === "visita" && (
             <VendedorVisita
               seller={session}
-              cobroIds={sellerCobros}
+              cobroIds={sellerCobroId ? [sellerCobroId] : []}
               customers={customers}
               products={products}
               onVisit={sellerRegisterVisit}
