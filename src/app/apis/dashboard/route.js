@@ -137,7 +137,43 @@ export async function GET() {
       ORDER BY c.current_balance DESC, c.name
     `);
 
-    return ok({ totals, sellers, balances, collectionTarget: collectionTarget[0], sellerTargets, today_dow, today_date });
+    // Weekly series (Monday-Sunday, America/Bogota) for charts
+    const week = await query(
+      `
+        WITH week_start AS (
+          SELECT $1::date - (((EXTRACT(DOW FROM $1::date))::int + 6) % 7) AS w
+        ),
+        days AS (
+          SELECT (w + n)::date AS day, n
+          FROM week_start, generate_series(0, 6) AS n
+        ),
+        earnings AS (
+          SELECT (cv.visit_date AT TIME ZONE 'America/Bogota')::date AS day,
+                 SUM(cvi.line_sale_total - cvi.line_investment_total) AS total
+          FROM cobrokits.customer_visits cv
+          JOIN cobrokits.customer_visit_items cvi ON cvi.visit_id = cv.id
+          JOIN week_start ON true
+          WHERE (cv.visit_date AT TIME ZONE 'America/Bogota')::date BETWEEN w AND w + 6
+          GROUP BY day
+        ),
+        production AS (
+          SELECT (paid_at AT TIME ZONE 'America/Bogota')::date AS day,
+                 SUM(amount) AS total
+          FROM cobrokits.payments
+          JOIN week_start ON true
+          WHERE (paid_at AT TIME ZONE 'America/Bogota')::date BETWEEN w AND w + 6
+          GROUP BY day
+        )
+        SELECT to_char(d.day, 'YYYY-MM-DD') AS day, COALESCE(e.total, 0) AS ganancia_estimada, COALESCE(p.total, 0) AS produccion
+        FROM days d
+        LEFT JOIN earnings e ON e.day = d.day
+        LEFT JOIN production p ON p.day = d.day
+        ORDER BY d.n
+      `,
+      [today_date],
+    );
+
+    return ok({ totals, sellers, balances, collectionTarget: collectionTarget[0], sellerTargets, today_dow, today_date, week });
   } catch (error) {
     return fail(error, 500);
   }

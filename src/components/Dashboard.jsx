@@ -1,4 +1,15 @@
 import { Banknote, Boxes, ClipboardList, CreditCard } from "lucide-react";
+import { ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, Tooltip, Legend, CartesianGrid } from "recharts";
+
+const weekDayLabels = ["Lun", "Mar", "Mié", "Jue", "Vie", "Sáb", "Dom"];
+const DONUT_COLORS = ["#3B82F6", "#10B981", "#F59E0B", "#8B5CF6", "#EF4444", "#06B6D4", "#F97316"];
+
+function compactMoney(v) {
+  const n = Number(v || 0);
+  if (n >= 1000000) return `$${(n / 1000000).toLocaleString("es-CO", { maximumFractionDigits: 1 })}M`;
+  if (n >= 1000) return `$${(n / 1000).toLocaleString("es-CO", { maximumFractionDigits: 0 })}k`;
+  return `$${Math.round(n)}`;
+}
 
 function SkeletonLine({ width = "60%", height = "1.2rem" }) {
   return (
@@ -27,26 +38,11 @@ function MetricSkeleton() {
   );
 }
 
-function ListItemSkeleton() {
-  return (
-    <div className="listItem">
-      <div style={{ display: "grid", gap: "6px", flex: 1 }}>
-        <SkeletonLine width="55%" height="0.9rem" />
-        <SkeletonLine width="38%" height="0.75rem" />
-      </div>
-      <SkeletonLine width="70px" height="1rem" />
-    </div>
-  );
-}
-
 export function Dashboard({
   dashboard,
   formatMoney,
   loading,
   activeSellerId = "",
-  activeSellerName = "Todos los vendedores",
-  activeCobroId = "",
-  activeCobroName = "",
 }) {
   const totals = dashboard?.totals || {};
   const sellers = dashboard?.sellers || [];
@@ -58,14 +54,8 @@ export function Dashboard({
   const todayBalances = (dashboard?.balances || []).filter(
     (balance) => balance.visit_day === todayDow
   );
-  const filteredBalances = todayBalances.filter(
-    (balance) =>
-      (!activeCobroId || balance.cobro_id === activeCobroId) &&
-      (!activeSellerId || balance.seller_id === activeSellerId),
-  );
   
   // Meta del vendedor activo (o global si no hay filtro)
-  const sellerTargetToday = filteredBalances.reduce((sum, b) => sum + Number(b.current_balance || 0), 0);
   const globalTargetToday = todayBalances.reduce((sum, b) => sum + Number(b.current_balance || 0), 0);
   // Total cobrado hoy (global)
   const totalCollectedToday = Number(totals.collected_today || 0);
@@ -80,6 +70,22 @@ export function Dashboard({
     : (activeSellerId 
         ? (sellers.find(s => s.seller_id === activeSellerId)?.collection_target || 0)
         : sellers.reduce((sum, s) => sum + Number(s.collection_target || 0), 0));
+
+  const week = dashboard?.week || [];
+  const weekData = week.map((d, i) => ({
+    label: weekDayLabels[i] ?? String(i),
+    ganancia: Number(d.ganancia_estimada || 0),
+    produccion: Number(d.produccion || 0),
+  }));
+  const totalGananciaSemana = week.reduce((s, d) => s + Number(d.ganancia_estimada || 0), 0);
+  const totalProdSemana = week.reduce((s, d) => s + Number(d.produccion || 0), 0);
+  const donutData = weekData.filter((d) => d.produccion > 0);
+
+  const sellersData = (dashboard?.sellers || []).map((s) => ({
+    fullName: s.seller_name || "Sin nombre",
+    label: (s.seller_name || "").split(" ")[0] || "—",
+    produccion: Number(s.total_collected || 0),
+  }));
 
   return (
     <>
@@ -126,82 +132,84 @@ export function Dashboard({
           )}
       </section>
 
-      {/* ── Lists ────────────────────────────────── */}
+      {/* ── Weekly charts ───────────────────────── */}
       <section className="workgrid">
         <div className="panel listPanel">
           <div className="panelHead">
             <div>
-              <h2>Clientes a visitar hoy</h2>
-              <span>{activeCobroId ? activeCobroName : activeSellerName} · Meta: {formatMoney(sellerTargetToday)}</span>
+              <h2>Rendimiento de la semana</h2>
+              <span>Producción por día (abonos Lun-Dom)</span>
             </div>
             {loading
-              ? <SkeletonLine width="20px" height="1rem" />
-              : <span>{filteredBalances.length} clientes</span>
+              ? <SkeletonLine width="60px" height="1rem" />
+              : <span>{formatMoney(totalProdSemana)}</span>
             }
           </div>
-          <div className="list">
+          {loading
+            ? <SkeletonLine width="100%" height="180px" />
+            : donutData.length === 0
+              ? <div style={{ display: "grid", placeItems: "center", height: 220, color: "var(--muted)", fontSize: 13 }}>Sin abonos esta semana</div>
+              : <div style={{ width: "100%", height: 240 }}>
+                  <ResponsiveContainer width="100%" height="100%">
+                    <PieChart>
+                      <Pie data={donutData} dataKey="produccion" nameKey="label" cx="50%" cy="50%" innerRadius={55} outerRadius={85} paddingAngle={2}>
+                        {donutData.map((entry, i) => (
+                          <Cell key={entry.label} fill={DONUT_COLORS[i % DONUT_COLORS.length]} />
+                        ))}
+                      </Pie>
+                      <Tooltip formatter={(value) => formatMoney(value)} />
+                      <Legend />
+                    </PieChart>
+                  </ResponsiveContainer>
+                </div>
+          }
+        </div>
+
+        <div className="panel listPanel">
+          <div className="panelHead">
+            <div>
+              <h2>Ganancias estimadas de la semana</h2>
+              <span>Venta − inversión por día</span>
+            </div>
             {loading
-              ? [1,2,3].map(n => <ListItemSkeleton key={n} />)
-              : filteredBalances.map((balance) => (
-                  <article key={balance.customer_id} className="listItem">
-                    <div>
-                      <strong>{balance.customer_name?.toUpperCase()}</strong>
-                      <span>{balance.seller_name?.toUpperCase()} · {formatMoney(balance.current_balance)}</span>
-                    </div>
-                    <b>{formatMoney(balance.current_balance)}</b>
-                  </article>
-                ))
+              ? <SkeletonLine width="60px" height="1rem" />
+              : <span>{formatMoney(totalGananciaSemana)}</span>
             }
-            {!loading && filteredBalances.length > 0 && (
-              <article className="listItem summaryRow" style={{ borderTop: '2px solid var(--border)', background: 'var(--surface-2)', fontWeight: 'bold' }}>
-                <div>
-                  <strong>META TOTAL</strong>
-                  <span>{filteredBalances.length} clientes a visitar hoy</span>
-                </div>
-                <b>{formatMoney(sellerTargetToday)}</b>
-              </article>
-            )}
-            {!loading && filteredBalances.length === 0 && (
-              <article className="listItem">
-                <div>
-                  <strong>Sin clientes programados para hoy</strong>
-                  <span>{activeCobroId ? activeCobroName : activeSellerName}</span>
-                </div>
-              </article>
-            )}
+          </div>
+          <div style={{ width: "100%", height: 220 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={weekData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--line)" />
+                <XAxis dataKey="label" tick={{ fontSize: 11 }} stroke="var(--muted)" />
+                <YAxis tick={{ fontSize: 10 }} stroke="var(--muted)" width={46} tickFormatter={compactMoney} />
+                <Tooltip formatter={(value) => formatMoney(value)} labelFormatter={(label) => `Día ${label}`} />
+                <Bar dataKey="ganancia" name="Ganancia estimada" fill="#3B82F6" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
           </div>
         </div>
 
         <div className="panel listPanel">
           <div className="panelHead">
-            <h2>Rendimiento hoy</h2>
+            <div>
+              <h2>Producción por vendedor</h2>
+              <span>Abonos hoy (Efectivo + Nequi)</span>
+            </div>
             {loading
-              ? <SkeletonLine width="20px" height="1rem" />
-              : <span>{dashboard?.sellers?.length || 0} vendedores</span>
+              ? <SkeletonLine width="60px" height="1rem" />
+              : <span>{formatMoney(totalProduction)}</span>
             }
           </div>
-          <div className="list">
-            {loading
-              ? [1,2,3].map(n => <ListItemSkeleton key={n} />)
-              : (dashboard?.sellers || []).map((seller) => {
-                  const meta = Number(seller.collection_target || 0);
-                  const cobrado = Number(seller.total_collected || 0);
-                  const pendiente = meta - cobrado;
-                  return (
-                    <article key={seller.seller_id} className="listItem">
-                      <div>
-                        <strong>{seller.seller_name?.toUpperCase()}</strong>
-                        <span>
-                          Meta: {formatMoney(meta)} · Cobrado: {formatMoney(cobrado)} · Pendiente: {formatMoney(pendiente > 0 ? pendiente : 0)}
-                        </span>
-                      </div>
-                      <b style={{ color: cobrado >= meta ? 'var(--green)' : 'var(--red)' }}>
-                        {formatMoney(cobrado)}
-                      </b>
-                    </article>
-                  );
-                })
-            }
+          <div style={{ width: "100%", height: 220 }}>
+            <ResponsiveContainer width="100%" height="100%">
+              <BarChart data={sellersData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--line)" />
+                <XAxis dataKey="label" tick={{ fontSize: 11 }} stroke="var(--muted)" interval={0} />
+                <YAxis tick={{ fontSize: 10 }} stroke="var(--muted)" width={46} tickFormatter={compactMoney} />
+                <Tooltip formatter={(value) => formatMoney(value)} labelFormatter={(label) => sellersData.find((s) => s.label === label)?.fullName || label} />
+                <Bar dataKey="produccion" name="Producción" fill="#8B5CF6" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
           </div>
         </div>
       </section>
