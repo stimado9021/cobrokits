@@ -84,21 +84,39 @@ export async function GET(request) {
           AND cv.payment_amount > 0
         GROUP BY (cv.visit_date AT TIME ZONE 'America/Bogota')::date
       ),
-      -- Manual entries per day (from weekly_manual_entries, scoped by cobro/seller)
+      -- Manual entries per day (fuente única: daily_seller_entries, por vendedor).
+      -- Para cada vendedor del alcance: gasto / saldo_anterior manuales, y
+      -- dinero a entregar = entregado manual o (abono del vendedor - gasto).
+      seller_daily_manual AS (
+        SELECT
+          wd.day,
+          s.id AS seller_id,
+          dse.gasto,
+          dse.entregado,
+          dse.saldo_anterior AS manual_saldo_anterior,
+          dse.cnt_notes,
+          COALESCE(SUM(p.amount) FILTER (WHERE p.method = 'efectivo'), 0)
+            + COALESCE(SUM(p.amount) FILTER (WHERE p.method = 'nequi'), 0) AS seller_abono
+        FROM week_days wd
+        CROSS JOIN cobrokits.sellers s
+        LEFT JOIN cobrokits.daily_seller_entries dse ON dse.seller_id = s.id AND dse.entry_date = wd.day
+        LEFT JOIN cobrokits.payments p
+          ON p.seller_id = s.id
+         AND (p.paid_at AT TIME ZONE 'America/Bogota')::date = wd.day
+        WHERE s.status = 'activo'
+          AND ($3::uuid IS NOT NULL OR $2::uuid IS NULL OR s.id = $2::uuid)
+          AND ($3::uuid IS NULL OR s.id IN (SELECT seller_id FROM cobro_sellers))
+        GROUP BY wd.day, s.id, dse.gasto, dse.entregado, dse.saldo_anterior, dse.cnt_notes
+      ),
       daily_manual AS (
         SELECT
-          entry_date AS day,
-          gasto,
-          cnt_notes,
-          entregado,
-          saldo_anterior AS manual_saldo_anterior
-        FROM cobrokits.weekly_manual_entries
-        WHERE entry_date BETWEEN $1::date AND ($1::date + interval '6 days')
-          AND (
-            ($3::uuid IS NOT NULL AND cobro_id = $3::uuid)
-            OR ($3::uuid IS NULL AND $2::uuid IS NOT NULL AND seller_id = $2::uuid)
-            OR ($3::uuid IS NULL AND $2::uuid IS NULL AND cobro_id IS NULL AND seller_id IS NULL)
-          )
+          day,
+          SUM(COALESCE(gasto, 0)) AS gasto,
+          SUM(COALESCE(entregado, seller_abono - COALESCE(gasto, 0))) AS entregado,
+          SUM(manual_saldo_anterior) AS saldo_anterior,
+          COALESCE(string_agg(cnt_notes, ' | ') FILTER (WHERE cnt_notes IS NOT NULL AND cnt_notes <> ''), '') AS cnt_notes
+        FROM seller_daily_manual
+        GROUP BY day
       ),
       -- Active customer count (for % effectiveness)
       active_customers AS (
@@ -175,7 +193,7 @@ export async function GET(request) {
         COALESCE(dm.gasto, 0)                                    AS gasto,
         COALESCE(dm.cnt_notes, '')                               AS cnt_notes,
         -- Saldo anterior: manual override if provided, otherwise calculated from 7 days ago
-        COALESCE(dm.manual_saldo_anterior, dsa.saldo_anterior, 0)  AS saldo_anterior,
+        COALESCE(dm.saldo_anterior, dsa.saldo_anterior, 0)  AS saldo_anterior,
         -- Dinero a entregar = valor manual si existe, si no Abono - Gasto
         COALESCE(dm.entregado, COALESCE(dp.abono_total, 0)
           - COALESCE(dm.gasto, 0))                                AS dinero_a_entregar,
@@ -218,51 +236,98 @@ export async function GET(request) {
 /**
  * PUT /apis/weekly-report
  * Upserts manual fields for a single day.
- * Body: { date: "YYYY-MM-DD", gasto, cnt_notes }
+ * Body: { date: "YYYY-MM-DD", cobro_id?, seller_id?, gasto?, cnt_notes?, entregado?, saldo_anterior? }
+ *
+ * Los valores manuales se guardan SIEMPRE en daily_seller_entries (por vendedor),
+ * la misma fuente que usa el Reporte Diario, para que ambos reportes concuerden.
+ * Cuando el alcance es un cobro (o global), la edición se reparte en partes iguales
+ * entre los vendedores del cobro/día de forma que el agregado siga siendo exacto.
  */
 export async function PUT(request) {
   try {
     const body = await request.json();
-    const { date, cobro_id, seller_id } = body;
+    const { date, cobro_id, seller_id, gasto, cnt_notes, entregado, saldo_anterior } = body;
 
     if (!date) return fail(new Error("date requerido"), 400);
 
-    // Partial update: only persist fields the user actually edited.
-    const sets = [];
-    const params = [cobro_id || null, seller_id || null, date];
-    const colFor = {
-      gasto: "gasto",
-      cnt_notes: "cnt_notes",
-      entregado: "entregado",
-      saldo_anterior: "saldo_anterior",
-    };
-    for (const [key, col] of Object.entries(colFor)) {
-      if (body[key] !== undefined && body[key] !== null) {
-        params.push(body[key]);
-        sets.push(col);
+    // Resolver vendedores destino de la edición
+    let sellers = [];
+    if (seller_id) {
+      sellers = [seller_id];
+    } else {
+      const params = [date];
+      let where = "stock_date = $1::date";
+      if (cobro_id) {
+        params.push(cobro_id);
+        where += ` AND cobro_id = $${params.length}::uuid`;
+      }
+      let res = await query(
+        `SELECT DISTINCT seller_id FROM cobrokits.daily_seller_stock WHERE ${where}`,
+        params
+      );
+      sellers = res.map(r => r.seller_id);
+      // Fallback: si no hubo stock ese día, usar los vendedores históricos del cobro
+      if (sellers.length === 0 && cobro_id) {
+        res = await query(
+          `SELECT DISTINCT seller_id FROM cobrokits.daily_seller_stock WHERE cobro_id = $1::uuid`,
+          [cobro_id]
+        );
+        sellers = res.map(r => r.seller_id);
       }
     }
-    if (sets.length === 0) return fail(new Error("Sin campos para actualizar"), 400);
+    if (sellers.length === 0) return fail(new Error("Sin vendedores para este alcance en esa fecha"), 400);
 
-    const conflictTarget = (!cobro_id && !seller_id)
-      ? "ON CONFLICT (entry_date) WHERE cobro_id IS NULL AND seller_id IS NULL"
-      : "ON CONFLICT (entry_date, cobro_id, seller_id) WHERE cobro_id IS NOT NULL OR seller_id IS NOT NULL";
+    const n = sellers.length;
 
-    const fieldsSql = sets.map((_, i) => `$${i + 4}`).join(", ");
-    const [entry] = await query(
-      `
-      INSERT INTO cobrokits.weekly_manual_entries (cobro_id, seller_id, entry_date, ${sets.join(", ")})
-      VALUES ($1::uuid, $2::uuid, $3::date, ${fieldsSql})
-      ${conflictTarget}
-      DO UPDATE SET
-        ${sets.map(c => `${c} = EXCLUDED.${c}`).join(",\n        ")},
-        updated_at = now()
-      RETURNING entry_date::text AS day, cobro_id, seller_id, gasto, cnt_notes, entregado, saldo_anterior
-      `,
-      params
-    );
+    // Distribuir valores numéricos para que la suma coincida exactamente con lo editado
+    const split = {};
+    for (const key of ["gasto", "entregado", "saldo_anterior"]) {
+      const v = body[key];
+      if (v === undefined || v === null) continue;
+      const cents = Math.round(Number(v) * 100);
+      const q = Math.floor(cents / n);
+      const r = cents % n;
+      split[key] = sellers.map((_, i) => (i < r ? q + 1 : q) / 100);
+    }
 
-    return ok({ entry });
+    const entries = [];
+    for (let i = 0; i < n; i++) {
+      const sets = [];
+      const params = [date, sellers[i]];
+      const colFor = {
+        gasto: "gasto",
+        cnt_notes: "cnt_notes",
+        entregado: "entregado",
+        saldo_anterior: "saldo_anterior",
+      };
+      for (const [key, col] of Object.entries(colFor)) {
+        let val;
+        if (key === "cnt_notes") val = (i === 0 && body.cnt_notes !== undefined) ? body.cnt_notes : undefined;
+        else if (split[key] !== undefined) val = split[key][i];
+        if (val !== undefined && val !== null) {
+          params.push(val);
+          sets.push(col);
+        }
+      }
+      if (sets.length === 0) continue;
+
+      const fieldsSql = sets.map((_, j) => `$${j + 3}`).join(", ");
+      const [entry] = await query(
+        `
+        INSERT INTO cobrokits.daily_seller_entries (entry_date, seller_id, ${sets.join(", ")})
+        VALUES ($1::date, $2::uuid, ${fieldsSql})
+        ON CONFLICT (entry_date, seller_id)
+        DO UPDATE SET
+          ${sets.map(c => `${c} = EXCLUDED.${c}`).join(",\n        ")},
+          updated_at = now()
+        RETURNING entry_date::text AS day, seller_id, gasto, cnt_notes, entregado, saldo_anterior
+        `,
+        params
+      );
+      entries.push(entry);
+    }
+
+    return ok({ entries });
   } catch (error) {
     return fail(error, 400);
   }

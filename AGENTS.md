@@ -46,7 +46,7 @@ export async function GET() { ... }
 
 ### Database Schema
 - Schema: `cobrokits`
-- Main tables: `sellers`, `products`, `customers`, `seller_inventory`, `inventory_movements`, `customer_visits`, `customer_visit_items`, `payments`, `daily_seller_stock`, `warehouse_stock`, `weekly_manual_entries`
+- Main tables: `sellers`, `products`, `customers`, `seller_inventory`, `inventory_movements`, `customer_visits`, `customer_visit_items`, `payments`, `daily_seller_stock`, `warehouse_stock`, `daily_seller_entries`
 - Key functions: `register_customer_visit()`, `deliver_daily_stock()`, `close_seller_day()`, `auto_close_old_days()`
 - All monetary values: `NUMERIC(14,2)`
 - All IDs: `UUID` (gen_random_uuid())
@@ -93,10 +93,10 @@ export async function GET() { ... }
 - `auto_close_old_days()` closes all unclosed days before today
 
 ### Report Calculations
-- **% Efectividad** = `((efectivo + nequi) / cobros) * 100`, donde cobros = `suma_entrega`
+- **% Efectividad** = `((efectivo + nequi) / cobros) * 100`, donde cobros = `suma_entrega`. El total usa el ponderado `Σ(efectivo+nequi)/Σ(cobros)` (no promedio simple)
 - **Meta de cobro** = (ya no se usa para % Efectividad)
 - **Cuentas** (columna, antes "Clientes") = conteo de clientes únicos que compraron o abonaron hoy
-- **D1/D2 columns** — Removed from UI but still in DB (`weekly_manual_entries`)
+- **Valores manuales (gasto, entregado, saldo_anterior, notas)** — una sola fuente: `daily_seller_entries` (per-seller), usada por reporte diario y semanal. La tabla `weekly_manual_entries` fue eliminada
 - **Saldo Anterior** = `SUM(new_balance)` de las visitas del mismo día hace 7 días (mismo vendedor)
 - **Dinero a entregar** = `abono_total - gasto`
 - **Ganancia** = `$ - Costo` = `dinero_a_entregar - inversion_dia`

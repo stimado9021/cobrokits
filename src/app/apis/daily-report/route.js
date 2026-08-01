@@ -39,10 +39,18 @@ export async function GET(request) {
       daily_visits AS (
         SELECT
           cv.seller_id,
-          COUNT(cv.id) AS visitas_totales,
+          COUNT(cv.id) AS visitas_totales
+        FROM cobrokits.customer_visits cv
+        WHERE (cv.visit_date AT TIME ZONE 'America/Bogota')::date = $1::date
+        GROUP BY cv.seller_id
+      ),
+      daily_active_customers AS (
+        SELECT
+          cv.seller_id,
           COUNT(DISTINCT cv.customer_id) AS clientes_activos
         FROM cobrokits.customer_visits cv
         WHERE (cv.visit_date AT TIME ZONE 'America/Bogota')::date = $1::date
+          AND (cv.payment_amount > 0 OR cv.new_products_total > 0)
         GROUP BY cv.seller_id
       ),
       daily_visit_items AS (
@@ -96,7 +104,7 @@ export async function GET(request) {
         COALESCE(dp.m1_efectivo, 0) AS m1_efectivo,
         COALESCE(dp.m2_nequi, 0) AS m2_nequi,
         COALESCE(dp.m1_efectivo, 0) + COALESCE(dp.m2_nequi, 0) AS abono_total,
-        COALESCE(dv.clientes_activos, 0)::int AS clientes_abonaron,
+        COALESCE(dac.clientes_activos, 0)::int AS clientes_abonaron,
         COALESCE(dv.visitas_totales, 0)::int AS visitas_totales,
         COALESCE(dvi.total_units, 0)::int AS total_units,
         COALESCE(dc.canceladas, 0)::int AS canceladas,
@@ -117,6 +125,7 @@ export async function GET(request) {
       FROM seller_list sl
       LEFT JOIN daily_payments dp ON dp.seller_id = sl.id
       LEFT JOIN daily_visits dv ON dv.seller_id = sl.id
+      LEFT JOIN daily_active_customers dac ON dac.seller_id = sl.id
       LEFT JOIN daily_visit_items dvi ON dvi.seller_id = sl.id
       LEFT JOIN daily_canceled dc ON dc.seller_id = sl.id
       LEFT JOIN daily_sale_value dsv ON dsv.seller_id = sl.id

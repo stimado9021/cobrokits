@@ -193,30 +193,6 @@ CREATE TABLE IF NOT EXISTS warehouse_stock_entries (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- Weekly report manual entries (scoped by cobro/seller to avoid cross-seller leaks)
-CREATE TABLE IF NOT EXISTS weekly_manual_entries (
-  id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  entry_date      DATE NOT NULL,
-  cobro_id        UUID REFERENCES cobrokits.cobros(id),
-  seller_id       UUID REFERENCES cobrokits.sellers(id),
-  gasto           NUMERIC(14,2) NOT NULL DEFAULT 0,
-  d1              NUMERIC(14,2) NOT NULL DEFAULT 0,
-  d2              NUMERIC(14,2) NOT NULL DEFAULT 0,
-  cnt_notes       TEXT,
-  entregado       NUMERIC(14,2),
-  saldo_anterior  NUMERIC(14,2),
-  created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
-);
-
-CREATE UNIQUE INDEX IF NOT EXISTS uq_weekly_manual_scope
-  ON weekly_manual_entries (entry_date, cobro_id, seller_id) NULLS NOT DISTINCT
-  WHERE cobro_id IS NOT NULL OR seller_id IS NOT NULL;
-
-CREATE UNIQUE INDEX IF NOT EXISTS uq_weekly_manual_legacy
-  ON weekly_manual_entries (entry_date)
-  WHERE cobro_id IS NULL AND seller_id IS NULL;
-
 -- Daily report per-seller manual entries (gasto, notes, entregado)
 CREATE TABLE IF NOT EXISTS daily_seller_entries (
   id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -266,9 +242,6 @@ CREATE OR REPLACE TRIGGER trg_customers_updated_at
 
 CREATE OR REPLACE TRIGGER trg_seller_inventory_updated_at
   BEFORE UPDATE ON seller_inventory FOR EACH ROW EXECUTE FUNCTION touch_updated_at();
-
-CREATE OR REPLACE TRIGGER trg_weekly_manual_entries_updated_at
-  BEFORE UPDATE ON weekly_manual_entries FOR EACH ROW EXECUTE FUNCTION touch_updated_at();
 
 CREATE OR REPLACE TRIGGER trg_daily_seller_entries_updated_at
   BEFORE UPDATE ON daily_seller_entries FOR EACH ROW EXECUTE FUNCTION touch_updated_at();

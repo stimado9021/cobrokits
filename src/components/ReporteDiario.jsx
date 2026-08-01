@@ -280,7 +280,12 @@ export function ReporteDiario({ activeSellerId = "", activeSellerName = "Todos l
     const val = n(totals[col.key]);
     const t = `Total ${col.label}: ${val ? fmt.format(val) : "0"}\n${col.desc}`;
     if (col.type === "number") return <span title={t}>{val || "0"}</span>;
-    if (col.type === "percent") return <span title={t}>{val ? `${Math.round(val / Math.max(sellers.length, 1))}%` : "0"}</span>;
+    if (col.type === "percent") {
+      const totalAbono = n(totals.abono_total);
+      const totalCobros = n(totals.suma_entrega);
+      const pct = totalCobros > 0 ? Math.round((totalAbono / totalCobros) * 100) : 0;
+      return <span title={t}>{pct ? `${pct}%` : "0"}</span>;
+    }
     if (col.key === "ganancia") {
       return <strong className={val > 0 ? "gain-positive" : "gain-negative"} title={t}>{money(val)}</strong>;
     }
@@ -348,7 +353,9 @@ export function ReporteDiario({ activeSellerId = "", activeSellerName = "Todos l
         let display = "";
         if (col.type === "label") display = "TOTAL";
         else if (col.type === "percent") {
-          const totalPct = Math.round(n(totals[col.key]) / Math.max(sellers.length, 1));
+          const tAbono = n(totals.abono_total);
+          const tCobros = n(totals.suma_entrega);
+          const totalPct = tCobros > 0 ? Math.round((tAbono / tCobros) * 100) : 0;
           display = totalPct ? `${totalPct}%` : "0";
         }
         else if (col.type === "number") display = n(totals[col.key]) || "0";
@@ -449,7 +456,9 @@ export function ReporteDiario({ activeSellerId = "", activeSellerName = "Todos l
         let display = ""; let cls = "total";
         if (col.type === "label") display = "TOTAL";
         else if (col.type === "percent") {
-          const totalPct = Math.round(n(totals[col.key]) / Math.max(sellers.length, 1));
+          const tAbono = n(totals.abono_total);
+          const tCobros = n(totals.suma_entrega);
+          const totalPct = tCobros > 0 ? Math.round((tAbono / tCobros) * 100) : 0;
           display = totalPct ? `${totalPct}%` : "0";
         }
         else if (col.type === "number") display = n(totals[col.key]) || "0";

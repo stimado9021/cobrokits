@@ -6,7 +6,7 @@ const client = new Client({ connectionString, ssl: { rejectUnauthorized: false }
 try {
   await client.connect();
   await client.query(sql);
-  console.log("OK: is_paid y scope de weekly_manual_entries aplicados");
+  console.log("OK: is_paid en customer_visits aplicado");
 } finally {
   await client.end();
 }

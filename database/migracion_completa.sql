@@ -170,20 +170,6 @@ CREATE TABLE IF NOT EXISTS warehouse_stock_entries (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
--- Weekly report manual entries
-CREATE TABLE IF NOT EXISTS weekly_manual_entries (
-  id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  entry_date DATE NOT NULL,
-  gasto      NUMERIC(14,2) NOT NULL DEFAULT 0,
-  d1         NUMERIC(14,2) NOT NULL DEFAULT 0,
-  d2         NUMERIC(14,2) NOT NULL DEFAULT 0,
-  cnt_notes  TEXT,
-  entregado  NUMERIC(14,2) NOT NULL DEFAULT 0,
-  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  updated_at TIMESTAMPTZ NOT NULL DEFAULT now(),
-  UNIQUE (entry_date)
-);
-
 -- ════════════════════════════════════════════════════════════════
 --  INDEXES
 -- ════════════════════════════════════════════════════════════════
@@ -219,9 +205,6 @@ CREATE OR REPLACE TRIGGER trg_customers_updated_at
 
 CREATE OR REPLACE TRIGGER trg_seller_inventory_updated_at
   BEFORE UPDATE ON seller_inventory FOR EACH ROW EXECUTE FUNCTION touch_updated_at();
-
-CREATE OR REPLACE TRIGGER trg_weekly_manual_entries_updated_at
-  BEFORE UPDATE ON weekly_manual_entries FOR EACH ROW EXECUTE FUNCTION touch_updated_at();
 
 -- ════════════════════════════════════════════════════════════════
 --  VIEWS

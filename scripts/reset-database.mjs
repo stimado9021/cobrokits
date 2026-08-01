@@ -14,7 +14,6 @@ async function resetDatabase() {
       'customer_visits',
       'daily_seller_stock',
       'daily_seller_entries',
-      'weekly_manual_entries',
       'warehouse_stock_entries',
       'warehouse_stock',
       'seller_inventory',

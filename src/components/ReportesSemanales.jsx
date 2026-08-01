@@ -304,7 +304,12 @@ export function ReportesSemanales({ activeSellerId = "", activeSellerName = "Tod
     const t = `Total ${row.label}: ${n(val) ? fmt.format(val) : "0"}\n${row.desc}`;
     if (row.type === "text") return "0";
     if (row.type === "number") return <span title={t}>{n(val) || "0"}</span>;
-    if (row.type === "percent") return <span title={t}>{n(val) ? `${Math.round(n(val) / 7)}%` : "0"}</span>;
+    if (row.type === "percent") {
+      const totalAbono = n(totals.abono_total);
+      const totalCobros = n(totals.suma_entrega);
+      const pct = totalCobros > 0 ? Math.round((totalAbono / totalCobros) * 100) : 0;
+      return <span title={t}>{pct ? `${pct}%` : "0"}</span>;
+    }
     if (row.key === "ganancia") {
       const v = n(val);
       return <strong className={v > 0 ? "gain-positive" : "gain-negative"} title={t}>{money(val)}</strong>;
@@ -395,8 +400,10 @@ export function ReportesSemanales({ activeSellerId = "", activeSellerName = "Tod
         let display = "";
         if (col.type === "label") display = "TOTAL";
         else if (col.type === "percent") {
-          const avg = n(totals[col.key]) ? `${Math.round(n(totals[col.key]) / 7)}%` : "0";
-          display = avg;
+          const tAbono = n(totals.abono_total);
+          const tCobros = n(totals.suma_entrega);
+          const avg = tCobros > 0 ? Math.round((tAbono / tCobros) * 100) : 0;
+          display = avg ? `${avg}%` : "0";
         }
         else if (col.type === "number") display = n(totals[col.key]) || "0";
         else display = formatMoneyPdf(totals[col.key]);
@@ -504,8 +511,10 @@ export function ReportesSemanales({ activeSellerId = "", activeSellerName = "Tod
         let display = ""; let cls = "total";
         if (col.type === "label") display = "TOTAL";
         else if (col.type === "percent") {
-          const avg = n(totals[col.key]) ? `${Math.round(n(totals[col.key]) / 7)}%` : "0";
-          display = avg;
+          const tAbono = n(totals.abono_total);
+          const tCobros = n(totals.suma_entrega);
+          const avg = tCobros > 0 ? Math.round((tAbono / tCobros) * 100) : 0;
+          display = avg ? `${avg}%` : "0";
         }
         else if (col.type === "number") display = n(totals[col.key]) || "0";
         else {

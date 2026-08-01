@@ -15,7 +15,6 @@ async function resetData() {
     'seller_inventory',
     'warehouse_stock_entries',
     'warehouse_stock',
-    'weekly_manual_entries',
     'customers',
     'sellers',
     'payments',

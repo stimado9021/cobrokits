@@ -9,7 +9,6 @@ const dayNum = ["Sunday","Monday","Tuesday","Wednesday","Thursday","Friday","Sat
 console.log(`\n🧪 Generando datos de prueba — ${hoy} (${days[dayNum]})\n`);
 
 // Limpiar datos transaccionales anteriores
-await sql(`DELETE FROM cobrokits.weekly_manual_entries`);
 await sql(`DELETE FROM cobrokits.daily_seller_entries`);
 await sql(`DELETE FROM cobrokits.payments`);
 await sql(`DELETE FROM cobrokits.customer_visit_items`);

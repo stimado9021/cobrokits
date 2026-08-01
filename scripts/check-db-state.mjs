@@ -57,28 +57,24 @@ async function check() {
     const t5 = await client.query("SELECT COUNT(*) as cnt FROM cobrokits.payments");
     console.log("Total payments:", t5.rows[0].cnt);
 
-    // 6. Check weekly_manual_entries
-    const t6 = await client.query("SELECT COUNT(*) as cnt FROM cobrokits.weekly_manual_entries");
-    console.log("Total weekly_manual_entries:", t6.rows[0].cnt);
+    // 6. Check daily_seller_stock
+    const t6 = await client.query("SELECT COUNT(*) as cnt FROM cobrokits.daily_seller_stock");
+    console.log("Total daily_seller_stock:", t6.rows[0].cnt);
 
-    // 7. Check daily_seller_stock
-    const t7 = await client.query("SELECT COUNT(*) as cnt FROM cobrokits.daily_seller_stock");
-    console.log("Total daily_seller_stock:", t7.rows[0].cnt);
-
-    // 8. List all tables in cobrokits schema
-    const t8 = await client.query(`
+    // 7. List all tables in cobrokits schema
+    const t7 = await client.query(`
       SELECT table_name FROM information_schema.tables 
       WHERE table_schema = 'cobrokits' ORDER BY table_name
     `);
-    console.log("All tables:", t8.rows.map(r => r.table_name).join(", "));
+    console.log("All tables:", t7.rows.map(r => r.table_name).join(", "));
 
-    // 9. Check recent visits
-    const t9 = await client.query(`
+    // 8. Check recent visits
+    const t8 = await client.query(`
       SELECT visit_date, seller_id, customer_id 
       FROM cobrokits.customer_visits 
       ORDER BY visit_date DESC LIMIT 5
     `);
-    console.log("Recent visits:", t9.rows);
+    console.log("Recent visits:", t8.rows);
 
   } finally {
     client.release();
