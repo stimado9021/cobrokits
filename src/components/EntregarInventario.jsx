@@ -107,21 +107,23 @@ export function EntregarInventario({
 
   // ─── Load daily stock for the selected cobro/seller and date ───────
   useEffect(() => {
-    if (!activeCobroId && !selectedSellerId) { setDailyItems([]); return; }
+    if (!activeCobroId && !selectedSellerId) { setDailyItems([]); setLoading(false); return; }
     let cancelled = false;
     setLoading(true);
     const params = new URLSearchParams();
     if (activeCobroId) params.set("cobroId", activeCobroId);
     else params.set("sellerId", selectedSellerId);
     params.set("stockDate", viewDate);
-    fetch(`/apis/daily-stock?${params}`)
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), 20000);
+    fetch(`/apis/daily-stock?${params}`, { signal: controller.signal })
       .then(r => r.json())
       .then(data => {
         if (!cancelled && data.success) setDailyItems(data.items || []);
       })
       .catch(() => { if (!cancelled) setDailyItems([]); })
-      .finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
+      .finally(() => { if (!cancelled) setLoading(false); clearTimeout(timer); });
+    return () => { cancelled = true; clearTimeout(timer); controller.abort(); };
   }, [activeCobroId, selectedSellerId, viewDate]);
 
   useEffect(() => {
